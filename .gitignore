@@ -1,0 +1,4 @@
+artefacts/*
+.idea/*
+!baseline_logs/*
+!test/input_files/*
