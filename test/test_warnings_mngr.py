@@ -1,3 +1,17 @@
+# Copyright (C) 2023 Speedb Ltd. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.'''
+
 import defs_and_utils
 from log_entry import LogEntry
 from warnings_mngr import WarningElementInfo, WarningsMngr
@@ -114,11 +128,11 @@ def test_warn_entries():
                                          expected_warnings_info,
                                          expected_errors_info)
 
-    expected_warnings_info = add_warning(warnings_mngr,
-                                         "2022/04/17-14:21:50.026058",
-                                         code_pos2, cf2, "Warning Message 3",
-                                         expected_warnings_info,
-                                         expected_errors_info)
+    add_warning(warnings_mngr,
+                "2022/04/17-14:21:50.026058",
+                code_pos2, cf2, "Warning Message 3",
+                expected_warnings_info,
+                expected_errors_info)
 
 
 def test_num_stalls_and_stops():

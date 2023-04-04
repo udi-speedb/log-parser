@@ -1,3 +1,17 @@
+# Copyright (C) 2023 Speedb Ltd. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.'''
+
 import csv_outputter
 from stats_mngr import StatsCountersAndHistogramsMngr
 from test.test_utils import \
@@ -39,7 +53,7 @@ def test_get_counters_csv():
     for entry in counter3_entry_lines:
         add_stats_entry_lines_to_mngr(entry, mngr)
 
-    expected_csv = ',counter1,counter3\r\n'\
+    expected_csv = 'Time,counter1,counter3\r\n'\
                    '2022/11/24-15:50:09.512106,0,0\r\n'\
                    '2022/11/24-15:50:10.512106,10,0\r\n'\
                    '2022/11/24-15:50:12.512106,0,100\r\n'
@@ -47,7 +61,7 @@ def test_get_counters_csv():
     assert csv_outputter.get_counters_csv(mngr) == expected_csv
 
 
-def test_get_histograms_csv():
+def test_get_human_readable_histograms_csv():
     counter1_entry_lines = [
         '''2022/11/24-15:50:09.512106 32851 [db_impl.cc:761] STATISTICS:
         counter1 P50 : .000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0'''.splitlines(), # noqa
@@ -79,7 +93,7 @@ def test_get_histograms_csv():
     for entry in counter3_entry_lines:
         add_stats_entry_lines_to_mngr(entry, mngr)
 
-    csv = csv_outputter.get_histogram_csv(mngr)
+    csv = csv_outputter.get_human_readable_histogram_csv(mngr)
     assert csv == \
         ',,,,,counter1,,,,,,,,,counter3,,,,\r\n' \
         ',P50,P95,P99,P100,Count,Sum,Average,Interval Count,Interval Sum,P50,P95,P99,P100,Count,Sum,Average,Interval Count,Interval Sum\r\n' \
@@ -87,3 +101,15 @@ def test_get_histograms_csv():
         '2022/11/24-15:50:10.512106,1.0,0.0,0.0,0.0,1,10,10.0,1,10,0,0,0,0,0,0,0,0,0\r\n' \
         '2022/11/24-15:50:11.512106,1.0,0.0,0.0,0.0,7,24,3.43,6,14,0,0,0,0,0,0,0,0,0\r\n' \
         '2022/11/24-15:50:12.512106,0,0,0,0,0,0,0,0,0,0.5,0.5,0.0,0.0,12,36,3.0,12,36\r\n' # noqa
+
+    csv = csv_outputter.get_tools_histogram_csv(mngr)
+    assert csv == \
+        'Name,Time,P50,P95,P99,P100,Count,Sum,Average,Interval Count,Interval Sum\r\n' \
+        'counter1,2022/11/24-15:50:09.512106,0.0,0.0,0.0,0.0,0,0,0.0,0,0\r\n' \
+        'counter1,2022/11/24-15:50:10.512106,1.0,0.0,0.0,0.0,1,10,10.0,1,10\r\n' \
+        'counter1,2022/11/24-15:50:11.512106,1.0,0.0,0.0,0.0,7,24,3.43,6,14\r\n' \
+        'counter1,2022/11/24-15:50:12.512106\r\n' \
+        'counter3,2022/11/24-15:50:09.512106,0,0,0,0,0,0,0,0,0\r\n' \
+        'counter3,2022/11/24-15:50:10.512106,0,0,0,0,0,0,0,0,0\r\n' \
+        'counter3,2022/11/24-15:50:11.512106,0,0,0,0,0,0,0,0,0\r\n' \
+        'counter3,2022/11/24-15:50:12.512106,0.5,0.5,0.0,0.0,12,36,3.0,12,36\r\n' # noqa

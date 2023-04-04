@@ -1,3 +1,17 @@
+# Copyright (C) 2023 Speedb Ltd. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.'''
+
 from enum import Enum, auto
 import re
 import defs_and_utils
@@ -863,10 +877,14 @@ class StatsMngr:
         entry_idx += 1
 
         db_stats_entry = log_entries[entry_idx]
-        db_stats_lines = db_stats_entry.get_msg_lines()
+        db_stats_lines =\
+            defs_and_utils.remove_empty_lines_at_start(
+                db_stats_entry.get_msg_lines())
         db_stats_time = db_stats_entry.get_time()
-        # "** DB Stats **" must be next
+        # "** DB Stats **" must be next (allowing empty lines until it arrives)
         assert len(db_stats_lines) > 0
+        if not DbWideStatsMngr.is_start_line(db_stats_lines[0]):
+            print("HER")
         assert DbWideStatsMngr.is_start_line(db_stats_lines[0])
 
         def log_parsing_error(msg_prefix):

@@ -1,3 +1,17 @@
+# Copyright (C) 2023 Speedb Ltd. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.'''
+
 import datetime
 from enum import Enum, auto
 import re
@@ -12,12 +26,17 @@ import regexes
 NO_COL_FAMILY = 'DB_WIDE'
 LOGGER_NAME = "log-analyzer-logger"
 BASELINE_LOGS_FOLDER = "baseline_logs"
-ARTEFACTS_FOLDER = "artefacts"
+DEFAULT_OUTPUT_FOLDER = "output_files"
 DEFAULT_LOG_FILE_NAME = "log_parser.log"
 DEFAULT_COUNTERS_FILE_NAME = "counters.csv"
-DEFAULT_HISTOGRAMS_FILE_NAME = "histograms.csv"
+DEFAULT_HUMAN_READABLE_HISTOGRAMS_FILE_NAME = "histograms_1.csv"
+DEFAULT_TOOLS_HISTOGRAMS_FILE_NAME = "histograms_2.csv"
+DEFAULT_HISTOGRAMS_FILE1_NAME = "histograms_1.csv"
 DEFAULT_COMPACTION_STATS_FILE_NAME = "compaction.csv"
 DEFAULT_CF_NAME = "default"
+DB_WIDE_WRITE_BUFFER_MANAGER_OPTIONS_NAME = "write_buffer_manager"
+TABLE_OPTIONS_TOPIC_TITLES = [("metadata_cache_options", "metadata_cache_"),
+                              ("block_cache_options", "block_cache_")]
 
 
 @dataclass
@@ -83,6 +102,16 @@ class LogFileNotFoundError(Exception):
         self.msg = f"{file_path} Not Found"
 
 
+class EmptyLogFile(Exception):
+    def __init__(self, file_path):
+        self.msg = f"{file_path} Is Empty"
+
+
+class InvalidLogFile(Exception):
+    def __init__(self, file_path):
+        self.msg = f"{file_path} is not a valid log File"
+
+
 class PointerResult(Enum):
     POINTER = auto()
     NULL_POINTER = auto()
@@ -101,7 +130,7 @@ def get_type(warning_type_str):
 
 class ConsoleOutputType(str, Enum):
     SHORT = "short"
-    FULL = "full"
+    LONG = "long"
 
 
 def try_parse_pointer(value_str):
@@ -280,17 +309,43 @@ def get_file_path(file_folder_name, file_basename):
     return pathlib.Path(f"{file_folder_name}/{file_basename}")
 
 
-def get_json_file_path(json_file_name):
-    return get_file_path(ARTEFACTS_FOLDER, json_file_name)
+def get_json_file_path(output_folder, json_file_name):
+    return get_file_path(DEFAULT_OUTPUT_FOLDER, json_file_name)
 
 
-def get_default_counters_csv_file_path():
-    return get_file_path(ARTEFACTS_FOLDER, DEFAULT_COUNTERS_FILE_NAME)
+def get_log_file_path(output_folder):
+    return get_file_path(output_folder, DEFAULT_LOG_FILE_NAME)
 
 
-def get_default_histograms_csv_file_path():
-    return get_file_path(ARTEFACTS_FOLDER, DEFAULT_HISTOGRAMS_FILE_NAME)
+def get_counters_csv_file_path(output_folder):
+    return get_file_path(output_folder, DEFAULT_COUNTERS_FILE_NAME)
 
 
-def get_default_compaction_stats_csv_file_path():
-    return get_file_path(ARTEFACTS_FOLDER, DEFAULT_COMPACTION_STATS_FILE_NAME)
+def get_human_readable_histograms_csv_file_path(output_folder):
+    return get_file_path(output_folder,
+                         DEFAULT_HUMAN_READABLE_HISTOGRAMS_FILE_NAME)
+
+
+def get_tools_histograms_csv_file_path(output_folder):
+    return get_file_path(output_folder,
+                         DEFAULT_TOOLS_HISTOGRAMS_FILE_NAME)
+
+
+def get_compaction_stats_csv_file_path(output_folder):
+    return get_file_path(output_folder,
+                         DEFAULT_COMPACTION_STATS_FILE_NAME)
+
+
+def get_num_leading_spaces(line):
+    return len(line) - len(line.lstrip())
+
+
+def get_table_options_topic_info(topic_name):
+    for topic_info in TABLE_OPTIONS_TOPIC_TITLES:
+        if topic_info[0] == topic_name:
+            return topic_info
+    return None
+
+
+def remove_empty_lines_at_start(lines):
+    return [line for line in lines if line.strip()]

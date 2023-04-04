@@ -1,3 +1,17 @@
+# Copyright (C) 2023 Speedb Ltd. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.'''
+
 from log_file_options_parser import LogFileOptionsParser
 from log_entry import LogEntry
 from test.sample_log_info import SampleLogInfo, SampleRolledLogInfo
@@ -72,7 +86,8 @@ def test_try_parsing_as_table_options_entry():
     table_option1 = "flush_block_policy_factory: " \
                     "FlushBlockBySizePolicyFactory (0x7f4af4091b90)"
     table_option2 = "cache_index_and_filter_blocks: 1"
-    table_option_no_value = " metadata_cache_options: "
+    table_option_special_value = " metadata_cache_options: "
+    table_option_special_value_cont1 = "  partition_pinning: 0 "
 
     expected_result = dict()
 
@@ -90,11 +105,16 @@ def test_try_parsing_as_table_options_entry():
         table_options_entry)
     assert expected_result == actual_result
 
-    table_options_entry.add_line(table_option_no_value)
-    expected_result["metadata_cache_options"] = ''
+    table_options_entry.add_line(table_option_special_value)
     actual_result = LogFileOptionsParser.try_parsing_as_table_options_entry(
         table_options_entry)
     assert expected_result == actual_result
+
+    table_options_entry.add_line(table_option_special_value_cont1)
+    expected_result["metadata_cache_partition_pinning"] = "0"
+    actual_result = LogFileOptionsParser.try_parsing_as_table_options_entry(
+        table_options_entry)
+    assert actual_result == expected_result
 
     options_entry = LogEntry(0, line_start + option1, True)
     assert LogFileOptionsParser.try_parsing_as_options_entry(options_entry)

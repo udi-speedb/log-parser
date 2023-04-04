@@ -1,3 +1,17 @@
+# Copyright (C) 2023 Speedb Ltd. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.'''
+
 import pytest
 import itertools
 import defs_and_utils
@@ -306,10 +320,10 @@ def test_parse_db_wide_stats():
 
 
 def test_empty_log_file():
-    with pytest.raises(defs_and_utils.ParsingError):
+    with pytest.raises(defs_and_utils.EmptyLogFile):
         ParsedLog("DummyPath", [])
 
 
 def test_unexpected_1st_log_line():
-    with pytest.raises(defs_and_utils.ParsingError):
+    with pytest.raises(defs_and_utils.InvalidLogFile):
         ParsedLog("DummyPath", ["Dummy Line", "Another Dummy Line"])

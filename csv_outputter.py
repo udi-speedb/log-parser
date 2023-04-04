@@ -1,3 +1,17 @@
+# Copyright (C) 2023 Speedb Ltd. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.'''
+
 import csv
 import io
 import logging
@@ -26,7 +40,7 @@ def get_counters_csv(counter_and_histograms_mngr):
     counters_idx = {name: 0 for name in counters_names}
 
     # csv header line (counter names)
-    writer.writerow([""] + counters_names)
+    writer.writerow(["Time"] + counters_names)
 
     # Write one line per time:
     for time_idx, time in enumerate(times):
@@ -54,7 +68,7 @@ def get_counters_csv(counter_and_histograms_mngr):
     return f.getvalue()
 
 
-def get_histogram_csv(counter_and_histograms_mngr):
+def get_human_readable_histogram_csv(counter_and_histograms_mngr):
     f = io.StringIO()
     writer = csv.writer(f)
 
@@ -113,6 +127,60 @@ def get_histogram_csv(counter_and_histograms_mngr):
             csv_line.extend(values)
 
         writer.writerow(csv_line)
+
+    return f.getvalue()
+
+
+def get_tools_histogram_csv(counter_and_histograms_mngr):
+    f = io.StringIO()
+    writer = csv.writer(f)
+
+    mngr = counter_and_histograms_mngr
+    # Get all histograms for which at least one entry is not 0 (=> there is at
+    # least one value that should be included for them in the CSV)
+    all_applicable_entries = mngr.get_histogram_entries_not_all_zeroes()
+
+    if not all_applicable_entries:
+        logging.info("No Histograms with non-zero values => NO CSV")
+        return None
+
+    counters_names = list(all_applicable_entries.keys())
+    times = mngr.get_histogram_counters_times()
+
+    # Support histogram entries with missing entries for some time point
+    # Maintain an index per histogram that advances only when the histogram has
+    # a value per csv row (one row per time point)
+    histograms_idx = {name: 0 for name in counters_names}
+
+    # csv header lines (counter names)
+    header_line = ["Name", "Time"]
+    counter_histogram_columns =\
+        list(all_applicable_entries[counters_names[0]][0]["values"].keys())
+    header_line.extend(counter_histogram_columns)
+    num_counter_columns = len(counter_histogram_columns)
+    writer.writerow(header_line)
+
+    # Write one line per time:
+    zero_values = [0 for i in range(num_counter_columns)]
+    for counter_name in counters_names:
+        for time_idx, time in enumerate(times):
+            csv_line = [counter_name, time]
+            histogram_entries = all_applicable_entries[counter_name]
+
+            values = zero_values
+            idx = histograms_idx[counter_name]
+            if idx < len(histogram_entries):
+                counter_entry_time = histogram_entries[idx]["time"]
+                time_diff = defs_and_utils.compare_times(counter_entry_time,
+                                                         time)
+                assert time_diff >= 0
+                if time_diff == 0:
+                    values = list(histogram_entries[idx]["values"].values())
+                    histograms_idx[counter_name] += 1
+
+                csv_line.extend(values)
+
+            writer.writerow(csv_line)
 
     return f.getvalue()
 

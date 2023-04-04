@@ -1,4 +1,20 @@
+# Copyright (C) 2023 Speedb Ltd. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.'''
+
 import io
+import logging
+
 import defs_and_utils
 import calc_utils
 import baseline_log_files_utils
@@ -60,8 +76,11 @@ def get_db_wide_notable_entities_display_info(parsed_log):
     db_options = parsed_log.get_database_options()
     for option_name, info in notable_entities.items():
         option_value = db_options.get_db_wide_option(option_name)
-        # TODO - Issue a logging error - don't assert
-        assert option_value is not None
+        if option_value is None:
+            logging.warning(f"Option {option_name} not found in "
+                            f"{parsed_log.get_log_file_path()}")
+            continue
+
         option_value_type = SanitizedValueType.get_type_from_str(option_value)
         if option_value_type == info.special_value_type:
             display_value = info.special_value_text

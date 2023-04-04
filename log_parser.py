@@ -1,4 +1,19 @@
+# Copyright (C) 2023 Speedb Ltd. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.'''
+
 import os
+import sys
 import io
 import argparse
 import textwrap
@@ -7,10 +22,13 @@ import pathlib
 import shutil
 import logging.config
 import defs_and_utils
-import json_output
+import json_outputter
 import console_outputter
-from log_file import ParsedLog
 import csv_outputter
+from log_file import ParsedLog
+
+
+DEBUG_MODE = True
 
 
 def parse_log(log_file_path):
@@ -20,7 +38,7 @@ def parse_log(log_file_path):
     logging.debug(f"Parsing {log_file_path}")
     with open(log_file_path) as log_file:
         log_lines = log_file.readlines()
-        log_lines = [line.strip() for line in log_lines]
+        # log_lines = [line.strip() for line in log_lines]
         return ParsedLog(log_file_path, log_lines)
 
 
@@ -35,16 +53,23 @@ def setup_cmd_line_parser():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=epilog)
-    parser.add_argument("log",
-                        metavar="log file path",
-                        help="A path to a log file to parse")
+    parser.add_argument("log_file_path",
+                        metavar="log-file-path",
+                        help="A path to a log file to parse "
+                             "(default: %(default)s)")
     parser.add_argument("-c", "--console",
-                        choices=["short", "full"],
+                        choices=["short", "long"],
                         help="Print to console a summary (short) or a "
-                             "full output ")
+                             "detailed (long) output (default: %(default)s)")
     parser.add_argument("-j", "--json-file-name",
                         metavar="[json file name]",
-                        help="Optional output json file name.")
+                        help="Optional output json file name"
+                             " (default: %(default)s)")
+    parser.add_argument("-o", "--output-folder",
+                        default=defs_and_utils.DEFAULT_OUTPUT_FOLDER,
+                        help="Optional folder to which the parser's output "
+                             "files will be written (existing contents will "
+                             "be DELETED!!!! (default: %(default)s)")
 
     return parser
 
@@ -64,40 +89,58 @@ def handle_exception(e):
     exit(1)
 
 
-def setup_logger():
-    logging.config.fileConfig(fname='logger.conf',
-                              disable_existing_loggers=True)
+def setup_logger(output_folder):
+    my_log_file_path = defs_and_utils.get_log_file_path(output_folder)
+    logging.basicConfig(filename=my_log_file_path,
+                        format="%(asctime)s - %(levelname)s [%(filename)s "
+                               "(%(funcName)s:%(lineno)d)] %(message)s)",
+                        level=logging.DEBUG)
+    return my_log_file_path
 
 
-def prepare_artefacts_folder():
-    artefacts_path = pathlib.Path(defs_and_utils.ARTEFACTS_FOLDER)
-    if artefacts_path.exists():
-        shutil.rmtree(defs_and_utils.ARTEFACTS_FOLDER)
-    artefacts_path.mkdir()
+def prepare_output_folder(output_folder):
+    output_path = pathlib.Path(output_folder)
+    if output_path.exists():
+        shutil.rmtree(output_folder)
+    output_path.mkdir()
 
 
-def print_to_console_if_applicable():
-    if cmdline_args.console:
+def print_to_console_if_applicable(cmdline_args, log_file_path,
+                                   parsed_log, json_content):
+    f = io.StringIO()
+    console_content = None
+    if cmdline_args.console == defs_and_utils.ConsoleOutputType.SHORT:
         f.write(
             console_outputter.get_console_output(
                 log_file_path,
                 parsed_log,
                 cmdline_args.console))
-        print(f"{f.getvalue()}")
+        console_content = f.getvalue()
+    elif cmdline_args.console == defs_and_utils.ConsoleOutputType.LONG:
+        console_content = json_outputter.get_json_dump_str(json_content)
+
+    if console_content is not None:
+        print(console_content)
 
 
-def generate_json_if_applicable():
-    if cmdline_args.json_file_name:
-        json_content = json_output.get_json(parsed_log)
-        json_output.write_json(cmdline_args.json_file_name, json_content)
+def generate_json_if_applicable(cmdline_args, parsed_log, output_folder):
+    json_content = None
+    if cmdline_args.json_file_name or \
+            cmdline_args.console == defs_and_utils.ConsoleOutputType.LONG:
+        json_content = json_outputter.get_json(parsed_log)
+        if cmdline_args.json_file_name:
+            json_outputter.write_json(cmdline_args.json_file_name,
+                                      json_content, output_folder)
+
+    return json_content
 
 
-def generate_counters_csv(mngr):
+def generate_counters_csv(mngr, output_folder):
     counters_csv = csv_outputter.get_counters_csv(mngr)
 
     if counters_csv:
         counters_csv_file_name = \
-            defs_and_utils.get_default_counters_csv_file_path()
+            defs_and_utils.get_counters_csv_file_path(output_folder)
         with open(counters_csv_file_name, "w") as f:
             f.write(counters_csv)
         print(f"Counters CSV Is in {counters_csv_file_name}")
@@ -105,23 +148,48 @@ def generate_counters_csv(mngr):
         print("No Counters to report")
 
 
-def generate_histograms_csv(mngr):
-    histograms_csv = csv_outputter.get_histogram_csv(mngr)
+def generate_human_readable_histograms_csv(mngr, output_folder):
+    histograms_csv = \
+        csv_outputter.get_human_readable_histogram_csv(mngr)
     if histograms_csv:
         histograms_csv_file_name = \
-            defs_and_utils.get_default_histograms_csv_file_path()
+            defs_and_utils.\
+            get_human_readable_histograms_csv_file_path(output_folder)
         with open(histograms_csv_file_name, "w") as f:
             f.write(histograms_csv)
-        print(f"Counters CSV Is in {histograms_csv_file_name}")
+        print(f"Human Readable Counters Histograms CSV Is in"
+              f" {histograms_csv_file_name}")
+        return True
+    else:
+        print("No Counters Histograms to report")
+        return True
+
+
+def generate_tools_histograms_csv(mngr, output_folder):
+    histograms_csv = \
+        csv_outputter.get_tools_histogram_csv(mngr)
+    if histograms_csv:
+        histograms_csv_file_name = \
+            defs_and_utils.get_tools_histograms_csv_file_path(output_folder)
+        with open(histograms_csv_file_name, "w") as f:
+            f.write(histograms_csv)
+        print(f"Tools Counters Histograms CSV Is in"
+              f" {histograms_csv_file_name}")
     else:
         print("No Counters Histograms to report")
 
 
-def generate_compaction_csv(mngr):
+def generate_histograms_csv(mngr, output_folder):
+    if not generate_human_readable_histograms_csv(mngr, output_folder):
+        return
+    generate_tools_histograms_csv(mngr, output_folder)
+
+
+def generate_compaction_csv(mngr, output_folder):
     compaction_stats_csv = csv_outputter.get_compaction_stats_csv(mngr)
     if compaction_stats_csv:
         compactions_csv_file_name = \
-            defs_and_utils.get_default_compaction_stats_csv_file_path()
+            defs_and_utils.get_compaction_stats_csv_file_path(output_folder)
         with open(compactions_csv_file_name, "w") as f:
             f.write(compaction_stats_csv)
         print(f"Compactions CSV Is in {compactions_csv_file_name}")
@@ -129,40 +197,63 @@ def generate_compaction_csv(mngr):
         print("No Compaction Stats to report")
 
 
-def generate_csvs_if_applicable():
+def generate_csvs_if_applicable(parsed_log, output_folder):
     stats_mngr = parsed_log.get_stats_mngr()
 
     counters_and_histograms_mngr = stats_mngr.get_counter_and_histograms_mngr()
-    generate_counters_csv(counters_and_histograms_mngr)
-    generate_histograms_csv(counters_and_histograms_mngr)
+    generate_counters_csv(counters_and_histograms_mngr, output_folder)
+    generate_histograms_csv(counters_and_histograms_mngr, output_folder)
 
     compaction_stats_mngr = stats_mngr.get_compaction_stats_mngr()
-    generate_compaction_csv(compaction_stats_mngr)
+    generate_compaction_csv(compaction_stats_mngr, output_folder)
+
+
+def main():
+    parser = setup_cmd_line_parser()
+    cmdline_args = parser.parse_args()
+    output_folder = cmdline_args.output_folder
+
+    prepare_output_folder(output_folder)
+    my_log_file_path = setup_logger(output_folder)
+    validate_and_sanitize_cmd_line_args(cmdline_args)
+
+    try:
+        log_file_path = cmdline_args.log_file_path
+        parsed_log = parse_log(log_file_path)
+
+        json_content = generate_json_if_applicable(cmdline_args, parsed_log,
+                                                   output_folder)
+        print_to_console_if_applicable(cmdline_args, log_file_path, parsed_log,
+                                       json_content)
+        generate_csvs_if_applicable(parsed_log, output_folder)
+    except defs_and_utils.ParsingError as exception:
+        report_error(exception)
+    except defs_and_utils.LogFileNotFoundError as exception:
+        report_error(exception)
+        print(exception.msg, file=sys.stderr)
+    except defs_and_utils.EmptyLogFile as exception:
+        report_error(exception)
+        print(exception.msg, file=sys.stderr)
+    except defs_and_utils.InvalidLogFile as exception:
+        report_error(exception)
+        print(exception.msg, file=sys.stderr)
+    except ValueError as exception:
+        handle_exception(exception)
+    except AssertionError as exception:
+        if not DEBUG_MODE:
+            handle_exception(exception)
+        else:
+            raise
+    except Exception as exception:  # noqa
+        if not DEBUG_MODE:
+            print(f"An unrecoverable error occurred while parsing "
+                  f"{log_file_path}."
+                  f"\nMore details may be found in {my_log_file_path}",
+                  file=sys.stderr)
+            handle_exception(exception)
+        else:
+            raise
 
 
 if __name__ == '__main__':
-    prepare_artefacts_folder()
-    setup_logger()
-    parser = setup_cmd_line_parser()
-    cmdline_args = parser.parse_args()
-    validate_and_sanitize_cmd_line_args(cmdline_args)
-
-    e = None
-    try:
-        f = io.StringIO()
-        log_file_path = cmdline_args.log
-        parsed_log = parse_log(log_file_path)
-
-        print_to_console_if_applicable()
-        generate_json_if_applicable()
-        generate_csvs_if_applicable()
-    except defs_and_utils.ParsingError as e:
-        report_error(e)
-    except defs_and_utils.LogFileNotFoundError as e:
-        report_error(e)
-    except ValueError as e:
-        handle_exception(e)
-    except AssertionError as e:
-        handle_exception(e)
-    except Exception as e:  # noqa
-        handle_exception(e)
+    main()

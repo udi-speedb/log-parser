@@ -1,3 +1,17 @@
+# Copyright (C) 2023 Speedb Ltd. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.'''
+
 import re
 import defs_and_utils
 import regexes
@@ -108,6 +122,9 @@ class LogFileMetadata:
 
         self.end_time = end_time
 
+    def is_valid(self):
+        return self.product_name and self.version
+
     def get_product_name(self):
         return self.product_name
 
@@ -165,18 +182,11 @@ class ParsedLog:
     @staticmethod
     def parse_log_to_entries(log_file_path, log_lines):
         if len(log_lines) < 1:
-            raise defs_and_utils.ParsingError(
-                "Empty File",
-                defs_and_utils.ErrorContext(**{'file_path': log_file_path,
-                                               'log_line_idx': 0}))
+            raise defs_and_utils.EmptyLogFile(log_file_path)
 
         # first line must be the beginning of a log entry
         if not LogEntry.is_entry_start(log_lines[0]):
-            raise defs_and_utils.ParsingError(
-                "Unexpected first log line:",
-                defs_and_utils.ErrorContext(**{'log_line': log_lines[0],
-                                               'file_path': log_file_path,
-                                               'log_line_idx': 1}))
+            raise defs_and_utils.InvalidLogFile(log_file_path)
 
         # Failure to parse an entry should just skip that entry
         # (best effort)
@@ -231,6 +241,9 @@ class ParsedLog:
         self.metadata = \
             LogFileMetadata(self.log_entries[self.entry_idx:options_entry_idx],
                             self.entry_idx)
+        if not self.metadata.is_valid():
+            raise defs_and_utils.InvalidLogFile(self.log_file_path)
+
         self.entry_idx = options_entry_idx
 
     def generate_next_unknown_cf_name(self):
@@ -354,6 +367,7 @@ class ParsedLog:
         return True
 
     def try_parse_as_stats_entries(self):
+        entry_idx_on_entry = self.entry_idx
         result, self.entry_idx, cfs_names = \
             self.stats_mngr.try_adding_entries(self.log_entries,
                                                self.entry_idx)
@@ -361,7 +375,7 @@ class ParsedLog:
         if result:
             for cf_name in cfs_names:
                 self.cfs_metadata.handle_cf_name_found_during_parsing(
-                    cf_name, self.get_curr_entry())
+                    cf_name, self.get_entry(entry_idx_on_entry))
 
         return result
 
@@ -441,6 +455,9 @@ class ParsedLog:
 
     def get_warnings_mngr(self):
         return self.warnings_mngr
+
+    def get_entry(self, entry_idx):
+        return self.log_entries[entry_idx]
 
     def get_curr_entry(self):
         return self.log_entries[self.entry_idx]

@@ -1,3 +1,17 @@
+# Copyright (C) 2023 Speedb Ltd. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.'''
+
 import baseline_log_files_utils
 import defs_and_utils
 
@@ -69,62 +83,74 @@ def test_find_closest_version():
 def test_find_closest_baseline_log_file():
     find = baseline_log_files_utils.find_closest_baseline_log_file_name
 
-    closest_baseline_info = \
-        find(baseline_logs_folder_path,
-             defs_and_utils.ProductName.SPEEDB,
-             v("1.0.0"))
-    assert closest_baseline_info is None
+    versions_to_test_info = [
+        ("1.0.0", defs_and_utils.ProductName.SPEEDB, None, None),
+        ("2.2.1", defs_and_utils.ProductName.SPEEDB, "LOG-speedb-2.2.1",
+         "2.2.1"),
+        ("2.2.2", defs_and_utils.ProductName.SPEEDB, "LOG-speedb-2.2.1",
+         "2.2.1"),
+        ("32.0.1", defs_and_utils.ProductName.SPEEDB, "LOG-speedb-2.3.0",
+         "2.3.0"),
+        ("6.0.0", defs_and_utils.ProductName.ROCKSDB, None, None),
+        ("6.26.0", defs_and_utils.ProductName.ROCKSDB,
+         "LOG-rocksdb-6.26.0", "6.26.0"),
+        ("6.27.0", defs_and_utils.ProductName.ROCKSDB,
+         "LOG-rocksdb-6.26.0", "6.26.0"),
+        ("7.10.11", defs_and_utils.ProductName.ROCKSDB,
+         "LOG-rocksdb-7.7.3", "7.7.3"),
+        ("8.0.0", defs_and_utils.ProductName.ROCKSDB,
+         "LOG-rocksdb-8.0.0", "8.0.0"),
+        ("9.0.0", defs_and_utils.ProductName.ROCKSDB,
+         "LOG-rocksdb-8.0.0", "8.0.0")
+    ]
 
-    closest_baseline_info = \
-        find(baseline_logs_folder_path,
-             defs_and_utils.ProductName.SPEEDB,
-             v("2.2.1"))
-    assert closest_baseline_info is not None
-    closest_file_name, closest_version = closest_baseline_info
-    assert closest_file_name == "LOG-speedb-2.2.1"
-    assert closest_version == defs_and_utils.Version("2.2.1")
-
-    closest_file_name, closest_version = \
-        find(baseline_logs_folder_path,
-             defs_and_utils.ProductName.SPEEDB,
-             v("2.2.2"))
-    assert closest_file_name == "LOG-speedb-2.2.1"
-    assert closest_version == defs_and_utils.Version("2.2.1")
-
-    closest_file_name, closest_version = \
-        find(baseline_logs_folder_path,
-             defs_and_utils.ProductName.SPEEDB,
-             v("32.0.1 "))
-    assert closest_file_name == "LOG-speedb-2.3.0"
-    assert closest_version == defs_and_utils.Version("2.3.0")
-
-    # closest_file_path, closest_version = \
-    #     find(options_files_path,
-    #          defs_and_utils.ProductName.ROCKSDB,
-    #          v("7.8.3"))
-    # assert closest_file_path.name == "LOG-rocksdb-7.7.8"
-    # assert closest_version == defs_and_utils.Version("7.7.8")
-    #
+    for version_info in versions_to_test_info:
+        closest_baseline_info = \
+            find(baseline_logs_folder_path,
+                 version_info[1],
+                 v(version_info[0]))
+        if version_info[2] is None:
+            assert closest_baseline_info is None
+        else:
+            assert closest_baseline_info is not None
+            closest_file_name, closest_version = closest_baseline_info
+            assert closest_file_name == version_info[2]
+            assert closest_version == defs_and_utils.Version(version_info[3])
 
 
-def test_find_options_diff():
-    database_options_2_1_0, _ =\
+def test_find_oeEptions_diff():
+    database_options_rocksdb_7_7_3, _ =\
+        baseline_log_files_utils.get_baseline_database_options(
+            baseline_logs_folder_path,
+            defs_and_utils.ProductName.ROCKSDB,
+            version_str="7.7.3")
+
+    options_diff_rocksdb_7_7_3_vs_itself, closest_version =\
+        baseline_log_files_utils.find_options_diff_relative_to_baseline(
+            baseline_logs_folder_path,
+            defs_and_utils.ProductName.ROCKSDB,
+            v("7.7.3"),
+            database_options_rocksdb_7_7_3)
+    assert options_diff_rocksdb_7_7_3_vs_itself is None
+    assert closest_version == defs_and_utils.Version("7.7.3")
+
+    database_options_speedb_2_1_0, _ =\
         baseline_log_files_utils.get_baseline_database_options(
             baseline_logs_folder_path,
             defs_and_utils.ProductName.SPEEDB,
             version_str="2.1.0")
 
-    options_diff_2_1_0_vs_itself, closest_version =\
+    options_diff_speedb_2_1_0_vs_itself, closest_version =\
         baseline_log_files_utils.find_options_diff_relative_to_baseline(
             baseline_logs_folder_path,
             defs_and_utils.ProductName.SPEEDB,
             v("2.1.0"),
-            database_options_2_1_0)
-    assert options_diff_2_1_0_vs_itself is None
+            database_options_speedb_2_1_0)
+    assert options_diff_speedb_2_1_0_vs_itself is None
     assert closest_version == defs_and_utils.Version("2.1.0")
 
     expected_diff = {}
-    updated_database_options_2_1_0 = database_options_2_1_0
+    updated_database_options_2_1_0 = database_options_speedb_2_1_0
 
     curr_max_open_files_value = \
         updated_database_options_2_1_0.get_db_wide_option('max_open_files')
@@ -174,11 +200,11 @@ def test_find_options_diff():
     expected_diff['TableOptions.BlockBasedTable.NEW_CF_TABLE_OPTION1'] = \
         {'default': ("No Value", "NEW_CF_TABLE_VALUE1")}
 
-    options_diff_2_1_0_vs_itself, closest_version =\
+    options_diff_speedb_2_1_0_vs_itself, closest_version =\
         baseline_log_files_utils.find_options_diff_relative_to_baseline(
             baseline_logs_folder_path,
             defs_and_utils.ProductName.SPEEDB,
             v("2.1.0"),
             updated_database_options_2_1_0)
-    assert options_diff_2_1_0_vs_itself.get_diff_dict() == expected_diff
+    assert options_diff_speedb_2_1_0_vs_itself.get_diff_dict() == expected_diff
     assert closest_version == defs_and_utils.Version("2.1.0")

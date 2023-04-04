@@ -1,3 +1,17 @@
+# Copyright (C) 2023 Speedb Ltd. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.'''
+
 import re
 import regexes
 import defs_and_utils
@@ -82,7 +96,8 @@ class LogEntry:
         # Rest of 1st line's text starts the msg_lines part
         self.msg_lines = list()
         if parts[4 + part_increment]:
-            self.msg_lines.append(parts[4 + part_increment].strip())
+            # self.msg_lines.append(parts[4 + part_increment].strip())
+            self.msg_lines.append(parts[4 + part_increment])
 
         if last_line:
             self.all_lines_added()
@@ -109,7 +124,8 @@ class LogEntry:
         self.validate_not_finalized(log_line)
         self.validate_not_adding_entry_start_line(log_line)
 
-        self.msg_lines.append(log_line.strip())
+        # self.msg_lines.append(log_line.strip())
+        self.msg_lines.append(log_line)
         if last_line:
             self.all_lines_added()
 
@@ -148,10 +164,16 @@ class LogEntry:
         return self.code_pos
 
     def get_msg_lines(self):
+        return [line.strip() for line in self.msg_lines]
+
+    def get_non_stripped_msg_lines(self):
         return self.msg_lines
 
     def get_msg(self):
-        return ("\n".join(self.msg_lines)).strip()
+        return "\n".join(self.get_msg_lines()).strip()
+
+    def get_non_stripped_msg(self):
+        return "\n".join(self.msg_lines)
 
     def is_warn_msg(self):
         return self.warning_type

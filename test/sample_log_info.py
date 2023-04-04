@@ -1,3 +1,17 @@
+# Copyright (C) 2023 Speedb Ltd. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.'''
+
 from datetime import timedelta
 import defs_and_utils
 
@@ -78,10 +92,8 @@ class SampleLogInfo:
         'cache_index_and_filter_blocks_with_high_priority': '1',
         'pin_l0_filter_and_index_blocks_in_cache': '1',
         'pin_top_level_index_and_filter': '1',
-        'metadata_cache_options': '',
-        'top_level_index_pinning': '0',
-        'block_cache_options': '',
-        'capacity': '209715200',
+        'metadata_cache_top_level_index_pinning': '0',
+        'block_cache_capacity': '209715200',
         'block_cache_compressed': '(nil)',
         'prepopulate_block_cache': '0'}
 
@@ -89,13 +101,11 @@ class SampleLogInfo:
         'flush_block_policy_factory':
             'FlushBlockBySizePolicyFactory (0x7f4af4031090)',
         'pin_top_level_index_and_filter': '1',
-        'metadata_cache_options': '',
-        'unpartitioned_pinning': '3',
+        'metadata_cache_unpartitioned_pinning': '3',
         'no_block_cache': '0',
         'block_cache': '0x7f4bc07214d0',
-        'block_cache_options': '',
-        'memory_allocator': 'None',
-        'high_pri_pool_ratio': '0.100',
+        'block_cache_memory_allocator': 'None',
+        'block_cache_high_pri_pool_ratio': '0.100',
         'block_cache_compressed': '(nil)'}
 
     SAMPLE_CF2_TABLE_OPTIONS_DICT = {
