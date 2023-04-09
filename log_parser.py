@@ -19,7 +19,6 @@ import argparse
 import textwrap
 import logging
 import pathlib
-import shutil
 import logging.config
 import defs_and_utils
 import json_outputter
@@ -100,9 +99,21 @@ def setup_logger(output_folder):
 
 def prepare_output_folder(output_folder):
     output_path = pathlib.Path(output_folder)
-    if output_path.exists():
-        shutil.rmtree(output_folder)
-    output_path.mkdir()
+    output_path.mkdir(exist_ok=True)
+
+    largest_num = 0
+    for file in output_path.iterdir():
+        name = file.name
+        if name.startswith(defs_and_utils.OUTPUT_SUB_FOLDER_PREFIX):
+            name = name[len(defs_and_utils.OUTPUT_SUB_FOLDER_PREFIX):]
+            if name.isnumeric() and len(name) == 4:
+                num = int(name)
+                largest_num = max(largest_num, num)
+
+    updated_output_folder = f"{output_path.name}/log_parser_{largest_num+1:04}"
+    updated_output_path = pathlib.Path(updated_output_folder)
+    updated_output_path.mkdir()
+    return updated_output_folder
 
 
 def print_to_console_if_applicable(cmdline_args, log_file_path,
@@ -143,9 +154,9 @@ def generate_counters_csv(mngr, output_folder):
             defs_and_utils.get_counters_csv_file_path(output_folder)
         with open(counters_csv_file_name, "w") as f:
             f.write(counters_csv)
-        print(f"Counters CSV Is in {counters_csv_file_name}")
+        logging.info(f"Counters CSV Is in {counters_csv_file_name}")
     else:
-        print("No Counters to report")
+        logging.info("No Counters to report")
 
 
 def generate_human_readable_histograms_csv(mngr, output_folder):
@@ -157,11 +168,11 @@ def generate_human_readable_histograms_csv(mngr, output_folder):
             get_human_readable_histograms_csv_file_path(output_folder)
         with open(histograms_csv_file_name, "w") as f:
             f.write(histograms_csv)
-        print(f"Human Readable Counters Histograms CSV Is in"
-              f" {histograms_csv_file_name}")
+        logging.info(f"Human Readable Counters Histograms CSV Is in"
+                     f" {histograms_csv_file_name}")
         return True
     else:
-        print("No Counters Histograms to report")
+        logging.info("No Counters Histograms to report")
         return True
 
 
@@ -173,10 +184,10 @@ def generate_tools_histograms_csv(mngr, output_folder):
             defs_and_utils.get_tools_histograms_csv_file_path(output_folder)
         with open(histograms_csv_file_name, "w") as f:
             f.write(histograms_csv)
-        print(f"Tools Counters Histograms CSV Is in"
-              f" {histograms_csv_file_name}")
+        logging.info(f"Tools Counters Histograms CSV Is in"
+                     f" {histograms_csv_file_name}")
     else:
-        print("No Counters Histograms to report")
+        logging.info("No Counters Histograms to report")
 
 
 def generate_histograms_csv(mngr, output_folder):
@@ -192,9 +203,9 @@ def generate_compaction_csv(mngr, output_folder):
             defs_and_utils.get_compaction_stats_csv_file_path(output_folder)
         with open(compactions_csv_file_name, "w") as f:
             f.write(compaction_stats_csv)
-        print(f"Compactions CSV Is in {compactions_csv_file_name}")
+        logging.info(f"Compactions CSV Is in {compactions_csv_file_name}")
     else:
-        print("No Compaction Stats to report")
+        logging.info("No Compaction Stats to report")
 
 
 def generate_csvs_if_applicable(parsed_log, output_folder):
@@ -213,7 +224,7 @@ def main():
     cmdline_args = parser.parse_args()
     output_folder = cmdline_args.output_folder
 
-    prepare_output_folder(output_folder)
+    output_folder = prepare_output_folder(output_folder)
     my_log_file_path = setup_logger(output_folder)
     validate_and_sanitize_cmd_line_args(cmdline_args)
 

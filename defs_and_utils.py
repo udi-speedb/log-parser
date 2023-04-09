@@ -27,10 +27,11 @@ NO_COL_FAMILY = 'DB_WIDE'
 LOGGER_NAME = "log-analyzer-logger"
 BASELINE_LOGS_FOLDER = "baseline_logs"
 DEFAULT_OUTPUT_FOLDER = "output_files"
+OUTPUT_SUB_FOLDER_PREFIX = "log_parser_"
 DEFAULT_LOG_FILE_NAME = "log_parser.log"
 DEFAULT_COUNTERS_FILE_NAME = "counters.csv"
-DEFAULT_HUMAN_READABLE_HISTOGRAMS_FILE_NAME = "histograms_1.csv"
-DEFAULT_TOOLS_HISTOGRAMS_FILE_NAME = "histograms_2.csv"
+DEFAULT_HUMAN_READABLE_HISTOGRAMS_FILE_NAME = "histograms_human_readable.csv"
+DEFAULT_TOOLS_HISTOGRAMS_FILE_NAME = "histograms_tools.csv"
 DEFAULT_HISTOGRAMS_FILE1_NAME = "histograms_1.csv"
 DEFAULT_COMPACTION_STATS_FILE_NAME = "compaction.csv"
 DEFAULT_CF_NAME = "default"
@@ -310,7 +311,7 @@ def get_file_path(file_folder_name, file_basename):
 
 
 def get_json_file_path(output_folder, json_file_name):
-    return get_file_path(DEFAULT_OUTPUT_FOLDER, json_file_name)
+    return get_file_path(output_folder, json_file_name)
 
 
 def get_log_file_path(output_folder):
