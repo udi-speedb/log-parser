@@ -37,12 +37,12 @@ but the user may override that.
 Running the tool without any parameters will allow users to view the 
 possible flags the tool supports:
    ```sh
-   pytho3 log_parser.py
+   python3 log_parser.py
    ```
 
 And also get detailed help information:
    ```sh
-   pytho3 log_parser.py -h
+   python3 log_parser.py -h
    ```
 
 
@@ -88,7 +88,7 @@ To run the unit tests:
 
 The repo contains a sample file that may be used to run the tool:
    ```sh
-   pytho3 test/input_files/LOG_speedb
+   python3 test/input_files/LOG_speedb
    ```
 
 

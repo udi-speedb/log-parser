@@ -395,14 +395,3 @@ def generate_ascii_table(columns_names, table):
     print('-' * len(header_line), file=f)
 
     return f.getvalue()
-
-
-if __name__ == '__main__':
-    columns_names = ["first", "second", "third"]
-    table = \
-        [
-            [100, 20, 400],
-            ['b', 'g', 'r'],
-            ["XXX", "TTTTTT", "S"]
-        ]
-    print(generate_ascii_table(columns_names, table))

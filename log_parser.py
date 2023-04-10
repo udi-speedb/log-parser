@@ -19,6 +19,7 @@ import argparse
 import textwrap
 import logging
 import pathlib
+import shutil
 import logging.config
 import defs_and_utils
 import json_outputter
@@ -44,9 +45,8 @@ def parse_log(log_file_path):
 def setup_cmd_line_parser():
     epilog = textwrap.dedent('''\
     Notes:
-    - The default it to print to the console in a short format
-    - It is possible to specify both json and console outputs. Both will be 
-       generated.
+    - The default it to print to the console in a short format.
+    - It is possible to specify both json and console outputs. Both will be generated.
     ''') # noqa
 
     parser = argparse.ArgumentParser(
@@ -66,10 +66,10 @@ def setup_cmd_line_parser():
                              " (default: %(default)s)")
     parser.add_argument("-o", "--output-folder",
                         default=defs_and_utils.DEFAULT_OUTPUT_FOLDER,
-                        help="Optional folder to which the parser's output "
-                             "files will be written (existing contents will "
-                             "be DELETED!!!! (default: %(default)s)")
-
+                        help='''
+                        Optional folder where a sub-folder containing the parser'
+                        output files will be written (default: "%(default)s")
+                        ''')
     return parser
 
 
@@ -97,23 +97,27 @@ def setup_logger(output_folder):
     return my_log_file_path
 
 
-def prepare_output_folder(output_folder):
-    output_path = pathlib.Path(output_folder)
-    output_path.mkdir(exist_ok=True)
-
+def prepare_output_folder(output_folder_parent):
+    output_path_parent = pathlib.Path(output_folder_parent)
     largest_num = 0
-    for file in output_path.iterdir():
-        name = file.name
-        if name.startswith(defs_and_utils.OUTPUT_SUB_FOLDER_PREFIX):
-            name = name[len(defs_and_utils.OUTPUT_SUB_FOLDER_PREFIX):]
-            if name.isnumeric() and len(name) == 4:
-                num = int(name)
-                largest_num = max(largest_num, num)
+    if output_path_parent.exists():
+        for file in output_path_parent.iterdir():
+            name = file.name
+            if name.startswith(defs_and_utils.OUTPUT_SUB_FOLDER_PREFIX):
+                name = name[len(defs_and_utils.OUTPUT_SUB_FOLDER_PREFIX):]
+                if name.isnumeric() and len(name) == 4:
+                    num = int(name)
+                    largest_num = max(largest_num, num)
 
-    updated_output_folder = f"{output_path.name}/log_parser_{largest_num+1:04}"
-    updated_output_path = pathlib.Path(updated_output_folder)
-    updated_output_path.mkdir()
-    return updated_output_folder
+        if largest_num == 9999:
+            largest_num = 1
+
+    output_folder = f"{output_folder_parent}/log_parser_{largest_num + 1:04}"
+    if not output_path_parent.exists():
+        os.makedirs(output_folder_parent)
+    shutil.rmtree(output_folder, ignore_errors=True)
+    os.makedirs(output_folder)
+    return output_folder
 
 
 def print_to_console_if_applicable(cmdline_args, log_file_path,

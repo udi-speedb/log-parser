@@ -14,6 +14,7 @@
 
 import io
 import json
+import logging
 import calc_utils
 import display_utils
 import defs_and_utils
@@ -81,4 +82,4 @@ def write_json(json_file_name, json_content, output_folder):
                                                   json_file_name)
     with json_path.open(mode='w') as json_file:
         json.dump(json_content, json_file)
-    print(f"JSON Output is in {json_path}")
+    logging.info(f"JSON Output is in {json_path}")

@@ -100,7 +100,7 @@ class ParsingAssertion(ParsingError):
 
 class LogFileNotFoundError(Exception):
     def __init__(self, file_path):
-        self.msg = f"{file_path} Not Found"
+        self.msg = f"Log file to parse ({file_path}) Not Found"
 
 
 class EmptyLogFile(Exception):
