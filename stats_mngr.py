@@ -12,37 +12,41 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.'''
 
-from enum import Enum, auto
-import re
-import defs_and_utils
-import regexes
-from datetime import timedelta
 import logging
+import re
+from dataclasses import dataclass
+from datetime import timedelta
+from enum import Enum, auto
 
-format_err_msg = defs_and_utils.format_err_msg
-ParsingAssertion = defs_and_utils.ParsingAssertion
-ErrContext = defs_and_utils.ErrorContext
-format_line_num_from_entry = defs_and_utils.format_line_num_from_entry
-format_line_num_from_line_idx = defs_and_utils.format_line_num_from_line_idx
-get_line_num_from_entry = defs_and_utils.get_line_num_from_entry
+import regexes
+import utils
+
+format_err_msg = utils.format_err_msg
+ParsingAssertion = utils.ParsingAssertion
+ErrContext = utils.ErrorContext
+format_line_num_from_entry = utils.format_line_num_from_entry
+format_line_num_from_line_idx = utils.format_line_num_from_line_idx
+get_line_num_from_entry = utils.get_line_num_from_entry
 
 
 def is_empty_line(line):
-    return re.findall(regexes.EMPTY_LINE_REGEX, line)
+    return re.fullmatch(regexes.EMPTY_LINE, line) is not None
 
 
 def parse_uptime_line(line, allow_mismatch=False):
-    line_parts = re.findall(regexes.UPTIME_STATS_LINE_REGEX, line)
+    # Uptime(secs): 603.0 total, 600.0 interval
+    match = re.search(regexes.UPTIME_STATS_LINE, line)
 
-    if not line_parts:
+    if not match:
         if allow_mismatch:
             return None
-        if not line_parts:
+        if not match:
             raise ParsingAssertion("Failed parsing uptime line",
                                    ErrContext(**{"line": line}))
 
-    total_sec, interval_sec = line_parts[0]
-    return float(total_sec), float(interval_sec)
+    total_sec = float(match.group('total'))
+    interval_sec = float(match.group('interval'))
+    return total_sec, interval_sec
 
 
 def parse_line_with_cf(line, regex_str, allow_mismatch=False):
@@ -60,12 +64,23 @@ def parse_line_with_cf(line, regex_str, allow_mismatch=False):
 
 
 class DbWideStatsMngr:
+    """ Parses and stores dumps of the db-wide stats at the top of the
+     DUMPING STATS dump
+    """
+    @dataclass
+    class CumulativeWritesInfo:
+        num_writes: int = 0
+        num_keys: int = 0
+        ingest: int = 0
+        ingest_rate_mbps: float = 0.0
+
     @staticmethod
     def is_start_line(line):
-        return re.findall(regexes.DB_STATS_REGEX, line) != []
+        return re.fullmatch(regexes.DB_STATS, line) is not None
 
     def __init__(self):
         self.stalls = {}
+        self.cumulative_writes = {}
 
     def add_lines(self, time, db_stats_lines):
         assert len(db_stats_lines) > 0
@@ -77,8 +92,9 @@ class DbWideStatsMngr:
                 continue
             elif self.try_parse_as_cumulative_stall_line(time, line):
                 continue
+            elif self.try_parse_as_cumulative_writes_line(time, line):
+                continue
 
-        assert self.stalls[time]
         if DbWideStatsMngr.is_all_zeroes_entry(self.stalls[time]):
             del self.stalls[time]
 
@@ -99,7 +115,7 @@ class DbWideStatsMngr:
 
     def try_parse_as_interval_stall_line(self, time, line):
         stall_info = DbWideStatsMngr.try_parse_as_stalls_line(
-            regexes.DB_WIDE_INTERVAL_STALL_REGEX, line)
+            regexes.DB_WIDE_INTERVAL_STALL, line)
         if stall_info is None:
             return None
 
@@ -109,7 +125,7 @@ class DbWideStatsMngr:
 
     def try_parse_as_cumulative_stall_line(self, time, line):
         stall_info = DbWideStatsMngr.try_parse_as_stalls_line(
-            regexes.DB_WIDE_CUMULATIVE_STALL_REGEX, line)
+            regexes.DB_WIDE_CUMULATIVE_STALL, line)
         if stall_info is None:
             return None
 
@@ -117,15 +133,59 @@ class DbWideStatsMngr:
         self.stalls[time].update({"cumulative_duration": stall_duration,
                                   "cumulative_percent": float(stall_percent)})
 
+    def try_parse_as_cumulative_writes_line(self, time, line):
+        writes_info = re.findall(regexes.DB_WIDE_CUMULATIVE_WRITES, line)
+        if not writes_info:
+            return None
+        assert len(writes_info) == 1 and len(writes_info[0]) == 6
+
+        writes_info = writes_info[0]
+        info = DbWideStatsMngr.CumulativeWritesInfo()
+        info.num_writes = utils.get_number_from_human_readable_components(
+            writes_info[0], writes_info[1])
+        info.num_keys = utils.get_number_from_human_readable_components(
+            writes_info[2], writes_info[3])
+        # Although ingest is a counter it's printed in units of GB (bytes)
+        info.ingest = \
+            utils.get_num_bytes_from_human_readable_str(f"{writes_info[4]} GB")
+        # Keep the ingest rate in MBPS as it is printed
+        info.ingest_rate_mbps = float(writes_info[5])
+
+        self.cumulative_writes[time] = info
+
     @staticmethod
     def is_all_zeroes_entry(entry):
-        return entry["interval_duration"].total_seconds() == 0.0 and \
-               entry["interval_percent"] == 0.0 and \
-               entry["cumulative_duration"].total_seconds() == 0.0 and \
-               entry["cumulative_percent"] == 0.0
+        interval_duration_total_secs = 0.0
+        interval_percent = 0.0
+        cumulative_duration_total_secs = 0
+        cumulative_percent = 0.0
+
+        if "interval_duration" in entry:
+            interval_duration_total_secs = \
+                entry["interval_duration"].total_seconds()
+        if "interval_percent" in entry:
+            interval_percent = entry["interval_percent"]
+        if "cumulative_duration" in entry:
+            cumulative_duration_total_secs = \
+                entry["cumulative_duration"].total_seconds()
+        if "cumulative_percent" in entry:
+            interval_percent = entry["cumulative_percent"]
+
+        return interval_duration_total_secs == 0.0 and \
+            interval_percent == 0.0 and \
+            cumulative_duration_total_secs == 0.0 and \
+            cumulative_percent == 0.0
 
     def get_stalls_entries(self):
         return self.stalls
+
+    def get_cumulative_writes_entries(self):
+        return self.cumulative_writes
+
+    def get_last_cumulative_writes_entry(self):
+        if not self.cumulative_writes:
+            return None
+        return utils.get_last_dict_entry(self.cumulative_writes)
 
 
 class CompactionStatsMngr:
@@ -135,14 +195,64 @@ class CompactionStatsMngr:
         INTERVAL = auto()
         USER = auto()
 
+    class LevelFields(str, Enum):
+        SIZE_BYTES = 'size_bytes'
+        WRITE_AMP = 'W-Amp'
+        COMP_SEC = 'Comp(sec)'
+        COMP_MERGE_CPU = 'CompMergeCPU(sec)'
+
+        @staticmethod
+        def get_fields_list():
+            return list(CompactionStatsMngr.LevelFields.__members__)
+
+        @staticmethod
+        def has_field(field):
+            assert isinstance(field, CompactionStatsMngr.LevelFields)
+            return field.name in \
+                CompactionStatsMngr.LevelFields.get_fields_list()
+
+    class CfLevelEntry:
+        def __init__(self, entry):
+            self.time = list(entry.keys())[0]
+            self.lines = entry[self.time]
+
+        @staticmethod
+        def get_level_key(level):
+            return f"LEVEL-{level}"
+
+        def get_time(self):
+            return self.time
+
+        def get_levels(self):
+            level_regex = fr"LEVEL-{regexes.INT_C}"
+            levels = []
+            for key in self.lines.keys():
+                match = re.findall(level_regex, key)
+                if match:
+                    levels.append(int(match[0]))
+            return levels
+
+        def get_level_line(self, level):
+            level_key = __class__.get_level_key(level)
+            if level_key not in self.lines:
+                return None
+            return self.lines[level_key]
+
+        def get_sum_line(self):
+            return self.lines['SUM']
+
+        def get_total_size_bytes(self):
+            return
+
     @staticmethod
     def parse_start_line(line, allow_mismatch=False):
-        return parse_line_with_cf(line, regexes.COMPACTION_STATS_REGEX,
+        return parse_line_with_cf(line, regexes.COMPACTION_STATS,
                                   allow_mismatch)
 
     @staticmethod
     def is_start_line(line):
-        return CompactionStatsMngr.parse_start_line(line, allow_mismatch=True)\
+        return CompactionStatsMngr.parse_start_line(line,
+                                                    allow_mismatch=True) \
                is not None
 
     def __init__(self):
@@ -151,7 +261,7 @@ class CompactionStatsMngr:
 
     def add_lines(self, time, cf_name, stats_lines):
         stats_lines = [line.strip() for line in stats_lines]
-        assert cf_name ==\
+        assert cf_name == \
                CompactionStatsMngr.parse_start_line(stats_lines[0])
 
         if stats_lines[1].startswith('Level'):
@@ -212,7 +322,9 @@ class CompactionStatsMngr:
 
     @staticmethod
     def parse_size_field(size_value, size_units):
-        return defs_and_utils.get_value_by_unit(size_value, size_units)
+        return utils.get_num_bytes_from_human_readable_components(
+            size_value,
+            size_units)
 
     def parse_level_lines(self, time, cf_name, stats_lines):
         header_fields = CompactionStatsMngr.parse_header_line(stats_lines[0],
@@ -232,7 +344,7 @@ class CompactionStatsMngr:
                 # TODO - Error
                 return
 
-            num_files, cf_num_files =\
+            num_files, cf_num_files = \
                 CompactionStatsMngr.parse_files_field(line_fields[1])
             if cf_num_files is None:
                 # TODO - Error
@@ -253,8 +365,8 @@ class CompactionStatsMngr:
                                                          size_units)
             }
             new_entry[key].update({
-                header_fields[i]: line_fields[i]
-                for i in range(2, len(header_fields))
+                header_fields[i]: line_fields[i+1]
+                for i in range(3, len(header_fields))
             })
 
         assert CompactionStatsMngr.LineType.SUM.name in new_entry
@@ -262,7 +374,7 @@ class CompactionStatsMngr:
         if time not in self.level_entries:
             self.level_entries[time] = {}
 
-        self.level_entries[time] = {cf_name: new_entry}
+        self.level_entries[time][cf_name] = new_entry
 
     def parse_priority_lines(self, time, cf_name, stats_lines):
         # TODO - Consider issuing an info message as Redis (e.g.) don not
@@ -284,21 +396,140 @@ class CompactionStatsMngr:
 
         return cf_entries
 
-    def get_cf_size_bytes(self, cf_name):
-        size_bytes = 0
-        cf_entries = self.get_cf_level_entries(cf_name)
-        if cf_entries:
-            temp = list(cf_entries[-1].values())[0]
-            last_entry = temp[CompactionStatsMngr.LineType.SUM.name]
-            size_bytes = last_entry["size_bytes"]
+    def get_first_cf_level_entry(self, cf_name):
+        all_entries = self.get_cf_level_entries(cf_name)
+        if not all_entries:
+            return None
+        return all_entries[0]
 
-        return size_bytes
+    def get_last_cf_level_entry(self, cf_name):
+        all_entries = self.get_cf_level_entries(cf_name)
+        if not all_entries:
+            return None
+        return all_entries[-1]
+
+    def get_first_level_entry_all_cfs(self):
+        all_entries = self.get_level_entries()
+        if not all_entries:
+            return None
+
+        time, first_all_cfs_dumps = \
+            utils.get_first_dict_entry_components(all_entries)
+        return {cf_name: {time: cf_entry} for cf_name, cf_entry in
+                first_all_cfs_dumps.items()}
+
+    def get_last_level_entry_all_cfs(self):
+        all_entries = self.get_level_entries()
+        if not all_entries:
+            return None
+
+        time, last_all_cfs_dumps = \
+            utils.get_last_dict_entry_components(all_entries)
+        return {cf_name: {time: cf_entry} for cf_name, cf_entry in
+                last_all_cfs_dumps.items()}
+
+    @staticmethod
+    def get_time_of_entry(stats_table):
+        keys = list(stats_table.keys())
+        assert len(keys) == 1
+        return keys[0]
+
+    @staticmethod
+    def get_level_entry_uptime_seconds(entry, log_start_time):
+        entry_time = CompactionStatsMngr.get_time_of_entry(entry)
+        return utils.get_times_strs_diff_seconds(log_start_time, entry_time)
+
+    @staticmethod
+    def get_field_value_for_line_in_entry(stats_table, line_key, field):
+        assert CompactionStatsMngr.LevelFields.has_field(field)
+
+        time = CompactionStatsMngr.get_time_of_entry(stats_table)
+        if line_key not in list(stats_table[time].keys()):
+            logging.info(f"{line_key} not in entry. time:{time}")
+            return None
+
+        level_line = stats_table[time][line_key]
+        if field.value not in level_line:
+            logging.info(f"{field.value} not in entry's line. time:{time}\n"
+                         f"{level_line}")
+            return None
+
+        return level_line[field.value]
+
+    @staticmethod
+    def get_field_value_for_all_levels(stats_table, field):
+        assert CompactionStatsMngr.LevelFields.has_field(field)
+
+        per_level_value = {}
+        time = CompactionStatsMngr.get_time_of_entry(stats_table)
+
+        line_key_regex = fr"LEVEL-{regexes.INT_C}"
+        for key, value in stats_table[time].items():
+            match = re.findall(line_key_regex, key)
+            if not match:
+                continue
+
+            level = int(match[0])
+            per_level_value[level] = \
+                CompactionStatsMngr.get_field_value_for_line_in_entry(
+                    stats_table, key, field)
+
+        if not per_level_value:
+            return None
+        return per_level_value
+
+    @staticmethod
+    def get_level_field_value(stats_table, level, field):
+        per_level_value = \
+            CompactionStatsMngr.get_field_value_for_all_levels(
+                stats_table, field)
+
+        if per_level_value is None:
+            return None
+
+        if level not in per_level_value:
+            logging.info(f"No info for level {level} in table.")
+            return None
+
+        return per_level_value[level]
+
+    @staticmethod
+    def get_sum_value(stats_table, field):
+        line_key = CompactionStatsMngr.LineType.SUM.name
+        value = \
+            CompactionStatsMngr.get_field_value_for_line_in_entry(
+                stats_table, line_key, field)
+
+        if value is None:
+            # SUM must be present always
+            raise utils.ParsingError(
+                f"{line_key} is missing from compaction stats.\n{stats_table}")
+
+        return value
+
+    def get_cf_size_bytes_at_end(self, cf_name):
+        last_cf_entry = self.get_last_cf_level_entry(cf_name)
+        if not last_cf_entry:
+            return 0
+        return CompactionStatsMngr.get_field_value_for_line_in_entry(
+            last_cf_entry, CompactionStatsMngr.LineType.SUM.name,
+            CompactionStatsMngr.LevelFields.SIZE_BYTES)
+
+    def get_cf_level_size_bytes(self, cf_name, level):
+        last_cf_entry = self.get_last_cf_level_entry(cf_name)
+        if not last_cf_entry:
+            return 0
+        # TODO - Turn this into a utility
+        level_key = f"LEVEL-{level}"
+        return CompactionStatsMngr.get_field_value_for_line_in_entry(
+            last_cf_entry, level_key,
+            CompactionStatsMngr.LevelFields.SIZE_BYTES)
 
 
 class BlobStatsMngr:
     @staticmethod
     def parse_blob_stats_line(line, allow_mismatch=False):
-        line_parts = re.findall(regexes.BLOB_STATS_LINE_REGEX, line)
+        line_parts = re.findall(regexes.BLOB_STATS_LINE, line)
         if not line_parts:
             if allow_mismatch:
                 return None
@@ -322,15 +553,19 @@ class BlobStatsMngr:
         assert len(db_stats_lines) > 0
         line = db_stats_lines[0]
 
-        line_parts = re.findall(regexes.BLOB_STATS_LINE_REGEX, line)
+        line_parts = re.findall(regexes.BLOB_STATS_LINE, line)
         assert line_parts and len(line_parts) == 1 and len(line_parts[0]) == 4
 
         components = line_parts[0]
         file_count = int(components[0])
-        total_size_bytes =\
-            defs_and_utils.get_value_by_unit(components[1], "GB")
+        total_size_bytes = \
+            utils.get_num_bytes_from_human_readable_components(
+                components[1],
+                "GB")
         garbage_size_bytes = \
-            defs_and_utils.get_value_by_unit(components[2], "GB")
+            utils.get_num_bytes_from_human_readable_components(
+                components[2],
+                "GB")
         space_amp = float(components[3])
 
         if cf_name not in self.entries:
@@ -362,12 +597,12 @@ class CfNoFileStatsMngr:
 
         if cf_name not in self.stall_counts:
             self.stall_counts[cf_name] = {}
-        # TODO - Redis have compaction stats for the same cf twice - WHY?
+        # TODO - I have seen compaction stats for the same cf twice - WHY?
         #######assert time not in self.stall_counts[cf_name] # noqa
         self.stall_counts[cf_name][time] = {}
 
-        stall_count_and_reason_matches =\
-            re.compile(regexes.CF_STALLS_COUNT_AND_REASON_REGEX)
+        stall_count_and_reason_matches = \
+            re.compile(regexes.CF_STALLS_COUNT_AND_REASON)
         sum_fields_count = 0
         for match in stall_count_and_reason_matches.finditer(line):
             count = int(match[1])
@@ -376,7 +611,7 @@ class CfNoFileStatsMngr:
         assert self.stall_counts[cf_name][time]
 
         total_count_match = re.findall(
-            regexes.CF_STALLS_INTERVAL_COUNT_REGEX, line)
+            regexes.CF_STALLS_INTERVAL_COUNT, line)
 
         # TODO - Last line of Redis's log was cropped in the middle
         ###### assert total_count_match and len(total_count_match) == 1 # noqa
@@ -402,26 +637,200 @@ class CfNoFileStatsMngr:
 
 
 class CfFileHistogramStatsMngr:
+    @dataclass
+    class CfLevelStats:
+        count: int = 0
+        average: float = 0.0
+        std_dev: float = 0.0
+        min: int = 0
+        median: float = 0.0
+        max: int = 0
+
+    class CfEntry:
+        def __init__(self, entry):
+            self.time = __class__.get_time(entry)
+            self.levels_stats = entry[self.time]
+
+        @staticmethod
+        def get_time(entry):
+            return list(entry.keys())[0]
+
+        def get_levels(self):
+            return list(self.levels_stats.keys())
+
+        def get_all_levels_stats(self):
+            return self.levels_stats
+
+        def get_level_stats(self, level):
+            if level not in self.levels_stats:
+                return None
+            return self.levels_stats[level]
+
     @staticmethod
     def parse_start_line(line, allow_mismatch=False):
         return parse_line_with_cf(line,
-                                  regexes.FILE_READ_LATENCY_STATS_REGEX,
+                                  regexes.FILE_READ_LATENCY_STATS,
                                   allow_mismatch)
 
     @staticmethod
     def is_start_line(line):
         return CfFileHistogramStatsMngr.parse_start_line(line,
-                                                         allow_mismatch=True)\
+                                                         allow_mismatch=True) \
                is not None
 
+    def __init__(self):
+        # Format: {<cf name>: {time: {<level>: CfLevelStats}}}
+        self.stats = dict()
+
     def add_lines(self, time, cf_name, db_stats_lines):
-        pass
+        # The lines are organized as follows:
+        # <cf-1> Header
+        # Level-<X> stats
+        # Level-<Y> stats
+        # ...
+        # A cf header is:
+        # ** File Read Latency Histogram By Level [<cf-name>] **
+        #
+        # The per level dumps are:
+        #  ** Level 0 read latency histogram (<cf-name>):
+        # Count: 25 Average: 1571.7200  StdDev: 5194.93
+        # Min: 1  Median: 2.8333  Max: 26097
+        # Percentiles: <Percentiles Line> (Not parsed currently)
+        # Per-Bucket Histogram Table (Not parsed currently)
+        #
+        assert isinstance(db_stats_lines, list)
+
+        num_lines = len(db_stats_lines)
+        assert num_lines > 0
+
+        # First line must be the start of a cf section
+        parsed_cf_name = CfFileHistogramStatsMngr.parse_start_line(
+            db_stats_lines[0])
+        assert cf_name == parsed_cf_name, \
+            f"cf_name:{cf_name}, parsed_cf_name:{parsed_cf_name}"
+
+        line_idx = 1
+        while line_idx < num_lines:
+            next_line_idx = \
+                CfFileHistogramStatsMngr.find_next_level_stats_start(
+                    db_stats_lines, line_idx + 1)
+            self.parse_next_level_stats(
+                time, cf_name, db_stats_lines[line_idx:next_line_idx])
+            line_idx = next_line_idx
+
+    @staticmethod
+    def find_next_level_stats_start(db_stats_lines, line_idx):
+        while line_idx < len(db_stats_lines):
+            if CfFileHistogramStatsMngr.\
+                    is_level_stats_start_line(db_stats_lines[line_idx]):
+                break
+            line_idx += 1
+
+        return line_idx
+
+    def parse_next_level_stats(self, time, cf_name, level_stats_lines):
+        if len(level_stats_lines) < 3:
+            raise utils.ParsingError(
+                f"Expecting at least 3 lines. time:{time}\n"
+                f"{level_stats_lines}")
+
+        new_stats = CfFileHistogramStatsMngr.CfLevelStats()
+        level = CfFileHistogramStatsMngr.parse_level_line(
+            time, cf_name, level_stats_lines[0])
+
+        CfFileHistogramStatsMngr.parse_stats_line_1(
+            time, cf_name, level_stats_lines[1], new_stats)
+        CfFileHistogramStatsMngr.parse_stats_line_2(
+            time, cf_name, level_stats_lines[2], new_stats)
+
+        self.add_cf_if_necessary(cf_name)
+        self.add_cf_time_if_necessary(cf_name, time)
+        if level in self.stats[cf_name][time]:
+            logging.warning(
+                f"Duplicate file read latency for level, Ignoring. "
+                f"tims:{time}, cf:{cf_name}. level:{level}\n"
+                f"{level_stats_lines}")
+            return
+
+        self.stats[cf_name][time][level] = new_stats
+
+    def add_cf_if_necessary(self, cf_name):
+        if cf_name not in self.stats:
+            self.stats[cf_name] = {}
+
+    def add_cf_time_if_necessary(self, cf_name, time):
+        if time not in self.stats[cf_name]:
+            self.stats[cf_name][time] = {}
+
+    @staticmethod
+    def parse_level_line(time, cf_name, line):
+        match = re.findall(regexes.LEVEL_READ_LATENCY_LEVEL_LINE, line)
+        if not match:
+            raise utils.ParsingError(
+                f"Failed parsing read latency level line. "
+                f"time:{time}, cf:{cf_name}\n"
+                f"{line}")
+        assert len(match) == 1
+
+        # Return the level
+        return int(match[0])
+
+    @staticmethod
+    def is_level_stats_start_line(line):
+        match = re.findall(regexes.LEVEL_READ_LATENCY_LEVEL_LINE, line)
+        return True if match else False
+
+    @staticmethod
+    def parse_stats_line_1(time, cf_name, line, new_stats):
+        match = re.findall(regexes.LEVEL_READ_LATENCY_STATS_LINE1, line)
+        if not match:
+            raise utils.ParsingError(
+                f"Failed parsing read latency level line. "
+                f"time:{time}, cf:{cf_name}\n"
+                f"{line}")
+        assert len(match) == 1 or len(match[0]) == 3
+
+        new_stats.count = int(match[0][0])
+        new_stats.average = float(match[0][1])
+        new_stats.std_dev = float(match[0][2])
+
+    @staticmethod
+    def parse_stats_line_2(time, cf_name, line, new_stats):
+        match = re.findall(regexes.LEVEL_READ_LATENCY_STATS_LINE2, line)
+        if not match:
+            raise utils.ParsingError(
+                f"Failed parsing read latency level line. "
+                f"time:{time}, cf:{cf_name}\n"
+                f"{line}")
+        assert len(match) == 1 or len(match[0]) == 3
+
+        new_stats.min = int(match[0][0])
+        new_stats.median = float(match[0][1])
+        new_stats.max = int(match[0][2])
+
+    def get_all_entries(self):
+        if not self.stats:
+            return None
+
+        return self.stats
+
+    def get_cf_entries(self, cf_name):
+        if cf_name not in self.stats:
+            return None
+
+        return self.stats[cf_name]
+
+    def get_last_cf_entry(self, cf_name):
+        all_entries = self.get_cf_entries(cf_name)
+        if not all_entries:
+            return None
+        return utils.get_last_dict_entry(all_entries)
 
 
 class BlockCacheStatsMngr:
     @staticmethod
     def is_start_line(line):
-        return re.findall(regexes.BLOCK_CACHE_STATS_START_REGEX, line)
+        return re.findall(regexes.BLOCK_CACHE_STATS_START, line)
 
     def __init__(self):
         self.caches = dict()
@@ -435,11 +844,12 @@ class BlockCacheStatsMngr:
         return cache_id
 
     def parse_cache_id_line(self, line):
-        line_parts = re.findall(regexes.BLOCK_CACHE_STATS_START_REGEX, line)
+        line_parts = re.findall(regexes.BLOCK_CACHE_STATS_START, line)
         assert line_parts and len(line_parts) == 1 and len(line_parts[0]) == 3
         cache_id, cache_capacity, capacity_units = line_parts[0]
-        capacity_bytes = defs_and_utils.get_value_by_unit(cache_capacity,
-                                                          capacity_units)
+        capacity_bytes = utils.\
+            get_num_bytes_from_human_readable_components(cache_capacity,
+                                                         capacity_units)
 
         if cache_id not in self.caches:
             self.caches[cache_id] = {"Capacity": capacity_bytes,
@@ -448,7 +858,7 @@ class BlockCacheStatsMngr:
         return cache_id
 
     def parse_global_entry_stats_line(self, time, cache_id, line):
-        line_parts = re.findall(regexes.BLOCK_CACHE_ENTRY_STATS_REGEX, line)
+        line_parts = re.findall(regexes.BLOCK_CACHE_ENTRY_STATS, line)
         assert line_parts and len(line_parts) == 1
 
         roles, roles_stats = BlockCacheStatsMngr.parse_entry_stats_line(
@@ -461,7 +871,8 @@ class BlockCacheStatsMngr:
         for i, role in enumerate(roles):
             count, size_with_unit, portion = roles_stats[i].split(',')
             size_bytes = \
-                defs_and_utils.get_value_by_size_with_unit(size_with_unit)
+                utils.get_num_bytes_from_human_readable_str(
+                    size_with_unit)
 
             self.caches[cache_id][time][role] = \
                 {"Count": int(count), "Size": size_bytes, "Portion": portion}
@@ -471,7 +882,7 @@ class BlockCacheStatsMngr:
         self.caches[cache_id]["Usage"] = usage
 
     def parse_cf_entry_stats_line(self, time, cache_id, line):
-        line_parts = re.findall(regexes.BLOCK_CACHE_CF_ENTRY_STATS_REGEX, line)
+        line_parts = re.findall(regexes.BLOCK_CACHE_CF_ENTRY_STATS, line)
         if not line_parts:
             return
         assert len(line_parts) == 1 and len(line_parts[0]) == 2
@@ -484,7 +895,8 @@ class BlockCacheStatsMngr:
         cf_entry = {}
         for i, role in enumerate(roles):
             size_bytes = \
-                defs_and_utils.get_value_by_size_with_unit(roles_stats[i])
+                utils.get_num_bytes_from_human_readable_str(
+                    roles_stats[i])
             if size_bytes > 0:
                 cf_entry[role] = size_bytes
 
@@ -492,11 +904,11 @@ class BlockCacheStatsMngr:
             if "CF-s" not in self.caches[cache_id][time]:
                 self.add_time_if_necessary(cache_id, time)
                 self.caches[cache_id][time]["CF-s"] = {}
-            self.caches[cache_id][time]["CF-s"] = {cf_name: cf_entry}
+            self.caches[cache_id][time]["CF-s"][cf_name] = cf_entry
 
     @staticmethod
     def parse_entry_stats_line(line):
-        roles = re.findall(regexes.BLOCK_CACHE_ENTRY_ROLES_NAMES_REGEX,
+        roles = re.findall(regexes.BLOCK_CACHE_ENTRY_ROLES_NAMES,
                            line)
         roles_stats = re.findall(regexes.BLOCK_CACHE_ENTRY_ROLES_STATS,
                                  line)
@@ -526,7 +938,7 @@ class BlockCacheStatsMngr:
 
         cf_entries = {}
         for key in all_cache_entries.keys():
-            time = defs_and_utils.parse_date_time(key)
+            time = utils.parse_time_str(key, expect_valid_str=False)
             if time:
                 time = key
                 if "CF-s" in all_cache_entries[time]:
@@ -546,226 +958,6 @@ class BlockCacheStatsMngr:
         return usage
 
 
-class StatsCountersAndHistogramsMngr:
-    @staticmethod
-    def is_start_line(line):
-        return re.findall(regexes.STATS_COUNTERS_AND_HISTOGRAMS_REGEX, line)
-
-    @staticmethod
-    def is_your_entry(entry):
-        entry_lines = entry.get_msg_lines()
-        return StatsCountersAndHistogramsMngr.is_start_line(entry_lines[0])
-
-    def __init__(self):
-        # list of counters names in the order of their appearance
-        # in the log file (retaining this order assuming it is
-        # convenient for the user)
-        self.counters_names = []
-        self.counters = dict()
-        self.histogram_counters_names = []
-        self.histograms = dict()
-
-    def add_entry(self, entry):
-        time = entry.get_time()
-        lines = entry.get_msg_lines()
-        assert StatsCountersAndHistogramsMngr.is_start_line(lines[0])
-
-        for i, line in enumerate(lines[1:]):
-            if self.try_parse_counter_line(time, line):
-                continue
-            if self.try_parse_histogram_line(time, line):
-                continue
-
-            # Skip badly formed lines
-            logging.error(format_err_msg(
-                "Failed parsing Counters / Histogram line"
-                f"Entry. time:{time}",
-                ErrContext(**{
-                    "log_line_idx": get_line_num_from_entry(entry, i+1),
-                    "log_line": line})))
-
-    def try_parse_counter_line(self, time, line):
-        line_parts = re.findall(regexes.STATS_COUNTER_REGEX, line)
-        if not line_parts:
-            return False
-        assert len(line_parts) == 1 and len(line_parts[0]) == 2
-
-        value = int(line_parts[0][1])
-        counter_name = line_parts[0][0]
-        if counter_name not in self.counters:
-            self.counters_names.append(counter_name)
-            self.counters[counter_name] = list()
-
-        entries = self.counters[counter_name]
-        if entries:
-            prev_entry = entries[-1]
-            prev_value = prev_entry["value"]
-
-            if value < prev_value:
-                logging.error(format_err_msg(
-                    f"count or sum DECREASED during interval - Ignoring Entry."
-                    f"prev_value:{prev_value}, count:{value}"
-                    f" (counter:{counter_name}), "
-                    f"prev_time:{prev_entry['time']}, time:{time}",
-                    ErrContext(**{"log_line": line})))
-                return True
-
-        self.counters[counter_name].append({
-            "time": time,
-            "value": value})
-
-        return True
-
-    def try_parse_histogram_line(self, time, line):
-        line_parts = re.findall(regexes.STATS_HISTOGRAM_REGEX, line)
-        if not line_parts:
-            return False
-        assert len(line_parts) == 1 and len(line_parts[0]) == 7
-
-        components = line_parts[0]
-
-        counter_name = components[0]
-        count = int(components[5])
-        total = int(components[6])
-        if total > 0 and count == 0:
-            logging.error(format_err_msg(
-                f"0 Count but total > 0 in a histogram (counter:"
-                f"{counter_name}), time:{time}",
-                ErrContext(**{"log_line": line})))
-
-        if counter_name not in self.histograms:
-            self.histograms[counter_name] = list()
-            self.histogram_counters_names.append(counter_name)
-
-        # There are cases where the count is > 0 but the
-        # total is 0 (e.g., 'rocksdb.prefetched.bytes.discarded')
-        if total > 0:
-            average = float(f"{(total / count):.2f}")
-        else:
-            average = float(f"{0.0:.2f}")
-
-        entries = self.histograms[counter_name]
-
-        prev_count = 0
-        prev_total = 0
-        if entries:
-            prev_entry = entries[-1]
-            prev_count = prev_entry["values"]["Count"]
-            prev_total = prev_entry["values"]["Sum"]
-
-            if count < prev_count or total < prev_total:
-                logging.error(format_err_msg(
-                    f"count or sum DECREASED during interval - Ignoring Entry."
-                    f"prev_count:{prev_count}, count:{count}"
-                    f"prev_sum:{prev_total}, sum:{total},"
-                    f" (counter:{counter_name}), "
-                    f"prev_time:{prev_entry['time']}, time:{time}",
-                    ErrContext(**{"log_line": line})))
-                return True
-
-        entries.append(
-            {"time": time,
-             "values": {"P50": float(components[1]),
-                        "P95": float(components[2]),
-                        "P99": float(components[3]),
-                        "P100": float(components[4]),
-                        "Count": count,
-                        "Sum": total,
-                        "Average": average,
-                        "Interval Count": count - prev_count,
-                        "Interval Sum": total - prev_total}})
-
-        return True
-
-    def get_counters_names(self):
-        return self.counters_names
-
-    def get_counters_times(self):
-        all_entries = self.get_all_counters_entries()
-        times = list(
-            {counter_entry["time"]
-             for counter_entries in all_entries.values()
-             for counter_entry in counter_entries})
-        times.sort()
-        return times
-
-    def get_counter_entries(self, counter_name):
-        if counter_name not in self.counters:
-            return {}
-        return self.counters[counter_name]
-
-    def get_non_zeroes_counter_entries(self, counter_name):
-        counter_entries = self.get_counter_entries(counter_name)
-        return list(filter(lambda entry: entry['value'] > 0,
-                           counter_entries))
-
-    def are_all_counter_entries_zero(self, counter_name):
-        return len(self.get_non_zeroes_counter_entries(counter_name)) == 0
-
-    def get_all_counters_entries(self):
-        return self.counters
-
-    def get_counters_entries_not_all_zeroes(self):
-        result = {}
-
-        for counter_name, counter_entries in self.counters.items():
-            if not self.are_all_counter_entries_zero(counter_name):
-                result.update({counter_name: counter_entries})
-
-        return result
-
-    def get_last_counter_entry(self, counter_name):
-        entries = self.get_counter_entries(counter_name)
-        if not entries:
-            return {}
-        return entries[-1]
-
-    def get_last_counter_value(self, counter_name):
-        last_entry = self.get_last_counter_entry(counter_name)
-
-        if not last_entry:
-            return 0
-
-        return last_entry["value"]
-
-    def get_histogram_counters_names(self):
-        return self.histogram_counters_names
-
-    def get_histogram_counters_times(self):
-        all_entries = self.get_all_histogram_entries()
-        times = list(
-            {counter_entry["time"]
-             for counter_entries in all_entries.values()
-             for counter_entry in counter_entries})
-        times.sort()
-        return times
-
-    def get_histogram_entries(self, counter_name):
-        if counter_name not in self.histograms:
-            return {}
-        return self.histograms[counter_name]
-
-    def get_all_histogram_entries(self):
-        return self.histograms
-
-    def get_non_zeroes_histogram_entries(self, counter_name):
-        histogram_entries = self.get_histogram_entries(counter_name)
-        return list(filter(lambda entry: entry['values']['Count'] > 0,
-                           histogram_entries))
-
-    def are_all_histogram_entries_zero(self, counter_name):
-        return len(self.get_non_zeroes_histogram_entries(counter_name)) == 0
-
-    def get_histogram_entries_not_all_zeroes(self):
-        result = {}
-
-        for counter_name, histogram_entries in self.histograms.items():
-            if not self.are_all_histogram_entries_zero(counter_name):
-                result.update({counter_name: histogram_entries})
-
-        return result
-
-
 class StatsMngr:
     class StatsType(Enum):
         DB_WIDE = auto()
@@ -783,11 +975,10 @@ class StatsMngr:
         self.block_cache_stats_mngr = BlockCacheStatsMngr()
         self.cf_no_file_stats_mngr = CfNoFileStatsMngr()
         self.cf_file_histogram_stats_mngr = CfFileHistogramStatsMngr()
-        self.counter_and_histograms_mngr = StatsCountersAndHistogramsMngr()
 
     @staticmethod
     def is_dump_stats_start(entry):
-        return entry.get_msg().startswith(regexes.DUMP_STATS_REGEX)
+        return entry.get_msg().startswith(regexes.DUMP_STATS_STR)
 
     @staticmethod
     def find_next_start_line_in_db_stats(db_stats_lines,
@@ -827,8 +1018,9 @@ class StatsMngr:
         stats_lines_to_parse = [line.strip() for line in stats_lines_to_parse]
 
         try:
-            logging.debug(f"Parsing Stats Component ({stats_type.name}) "
-                          f"[line# {entry_start_line_num+start_line_idx+1}]")
+            logging.debug(
+                f"Parsing Stats Component ({stats_type.name}) "
+                f"[line# {entry_start_line_num + start_line_idx + 1}]")
 
             valid_stats_type = True
             if stats_type == StatsMngr.StatsType.DB_WIDE:
@@ -850,7 +1042,7 @@ class StatsMngr:
                     time, cf_name, stats_lines_to_parse)
             else:
                 valid_stats_type = False
-        except Exception as e: # noqa
+        except utils.ParsingError as e:  # noqa
             logging.exception(format_err_msg(
                 f"Error parsing a Stats Entry. time:{time}, cf:{cf_name}" +
                 str(ErrContext(**{
@@ -877,14 +1069,12 @@ class StatsMngr:
         entry_idx += 1
 
         db_stats_entry = log_entries[entry_idx]
-        db_stats_lines =\
-            defs_and_utils.remove_empty_lines_at_start(
+        db_stats_lines = \
+            utils.remove_empty_lines_at_start(
                 db_stats_entry.get_msg_lines())
         db_stats_time = db_stats_entry.get_time()
         # "** DB Stats **" must be next (allowing empty lines until it arrives)
         assert len(db_stats_lines) > 0
-        if not DbWideStatsMngr.is_start_line(db_stats_lines[0]):
-            print("HER")
         assert DbWideStatsMngr.is_start_line(db_stats_lines[0])
 
         def log_parsing_error(msg_prefix):
@@ -897,7 +1087,7 @@ class StatsMngr:
 
         line_idx = 0
         stats_type = StatsMngr.StatsType.DB_WIDE
-        curr_cf_name = defs_and_utils.NO_COL_FAMILY
+        curr_cf_name = utils.NO_CF
         try:
             while line_idx < len(db_stats_lines):
                 next_line_num, next_stats_type, next_cf_name = \
@@ -906,11 +1096,6 @@ class StatsMngr:
                                                                stats_type)
                 # parsing must progress
                 assert next_line_num > line_idx
-
-                if next_cf_name is not None:
-                    curr_cf_name = next_cf_name
-                    if next_cf_name != defs_and_utils.NO_COL_FAMILY:
-                        cf_names_found.add(curr_cf_name)
 
                 self.parse_next_db_stats_entry_lines(
                     db_stats_time,
@@ -923,24 +1108,20 @@ class StatsMngr:
 
                 line_idx = next_line_num
                 stats_type = next_stats_type
+
+                if next_cf_name is not None:
+                    curr_cf_name = next_cf_name
+                    if next_cf_name != utils.NO_CF:
+                        cf_names_found.add(curr_cf_name)
         except AssertionError:
             log_parsing_error("Assertion")
             raise
-        except Exception: # noqa
+        except Exception:  # noqa
             log_parsing_error("Exception")
             raise
 
         # Done parsing the stats entry
         entry_idx += 1
-
-        # counters / histograms may or may not be present
-        # If they are present, they are contained in a single entry
-        # starting with "STATISTICS:"
-        if entry_idx < len(log_entries):
-            entry = log_entries[entry_idx]
-            if StatsCountersAndHistogramsMngr.is_your_entry(entry):
-                self.counter_and_histograms_mngr.add_entry(entry)
-                entry_idx += 1
 
         line_num = format_line_num_from_entry(log_entries[entry_idx]) \
             if entry_idx < len(log_entries) else \
@@ -952,7 +1133,7 @@ class StatsMngr:
     def get_db_wide_stats_mngr(self):
         return self.db_wide_stats_mngr
 
-    def get_compaction_stats_mngr(self):
+    def get_compactions_stats_mngr(self):
         return self.compaction_stats_mngr
 
     def get_blob_stats_mngr(self):
@@ -966,6 +1147,3 @@ class StatsMngr:
 
     def get_cf_file_histogram_stats_mngr(self):
         return self.cf_file_histogram_stats_mngr
-
-    def get_counter_and_histograms_mngr(self):
-        return self.counter_and_histograms_mngr

@@ -12,24 +12,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.'''
 
-import re
-import defs_and_utils
-import regexes
 import logging
+import re
+
+import regexes
+import utils
+from cfs_infos import CfsMetadata
+from compactions import CompactionsMonitor
+from counters import CountersAndHistogramsMngr
+from database_options import DatabaseOptions
+from db_files import DbFilesMonitor
+from events import EventsMngr
 from log_entry import LogEntry
 from log_file_options_parser import LogFileOptionsParser
-from database_options import DatabaseOptions
-from events_mngr import EventsMngr
-from warnings_mngr import WarningsMngr
 from stats_mngr import StatsMngr
-from cfs_infos import CfsMetadata
+from warnings_mngr import WarningsMngr
 
-get_error_context = defs_and_utils.get_error_context_from_entry
+get_error_context = utils.get_error_context_from_entry
 
 
 class LogFileMetadata:
     """
-    (Possibly) Contains the metadata information about a log file:
+    Contains the metadata information about a log file:
     - Product Name (RocksDB / Speedb)
     - S/W Version
     - Git Hash
@@ -71,13 +75,13 @@ class LogFileMetadata:
 
     def try_parse_as_product_and_version_entry(self, log_entry):
         lines = str(log_entry.msg_lines[0]).strip()
-        match_parts = re.findall(regexes.PRODUCT_AND_VERSION_REGEX, lines)
+        match_parts = re.findall(regexes.PRODUCT_AND_VERSION, lines)
 
         if not match_parts or len(match_parts) != 1:
             return False
 
         if self.product_name or self.version:
-            raise defs_and_utils.ParsingError(
+            raise utils.ParsingError(
                     f"Product / Version already parsed. Product:"
                     f"{self.product_name}, Version:{self.version})."
                     f"\n{log_entry}")
@@ -87,13 +91,13 @@ class LogFileMetadata:
 
     def try_parse_as_git_hash_entry(self, log_entry):
         lines = str(log_entry.msg_lines[0]).strip()
-        match_parts = re.findall(regexes.GIT_HASH_LINE_REGEX, lines)
+        match_parts = re.findall(regexes.GIT_HASH_LINE, lines)
 
         if not match_parts or len(match_parts) != 1:
             return False
 
         if self.git_hash:
-            raise defs_and_utils.ParsingError(
+            raise utils.ParsingError(
                 f"Git Hash Already Parsed ({self.git_hash})\n{log_entry}")
 
         self.git_hash = match_parts[0]
@@ -101,13 +105,13 @@ class LogFileMetadata:
 
     def try_parse_as_db_session_id_entry(self, log_entry):
         lines = str(log_entry.msg_lines[0]).strip()
-        match_parts = re.findall(regexes.DB_SESSION_ID_REGEX, lines)
+        match_parts = re.findall(regexes.DB_SESSION_ID, lines)
 
         if not match_parts or len(match_parts) != 1:
             return False
 
         if self.db_session_id:
-            raise defs_and_utils.ParsingError(
+            raise utils.ParsingError(
                 f"DB Session Id Already Parsed ({self.db_session_id})"
                 f"n{log_entry}")
 
@@ -117,8 +121,7 @@ class LogFileMetadata:
     def set_end_time(self, end_time):
         assert not self.end_time,\
             f"End time already set ({self.end_time})"
-        assert defs_and_utils.parse_date_time(end_time) >=\
-               defs_and_utils.parse_date_time(self.start_time)
+        assert utils.compare_times_strs(end_time, self.start_time) > 0
 
         self.end_time = end_time
 
@@ -145,30 +148,36 @@ class LogFileMetadata:
 
     def get_log_time_span_seconds(self):
         if not self.end_time:
-            raise defs_and_utils.ParsingAssertion(f"Unknown end time.\n{self}")
-
-        return ((defs_and_utils.parse_date_time(self.end_time) -
-                 defs_and_utils.parse_date_time(self.start_time)).seconds)
+            raise utils.ParsingAssertion(f"Unknown end time.\n{self}")
+        return int(utils.get_times_strs_diff_seconds(self.start_time,
+                                                     self.end_time))
 
 
 class ParsedLog:
     def __init__(self, log_file_path, log_lines):
+        logging.debug(f"Starting to parse {log_file_path}")
+        utils.parsing_context = utils.ParsingContext()
+        utils.parsing_context.parsing_starts(log_file_path)
+
         self.log_file_path = log_file_path
         self.metadata = None
         self.db_options = DatabaseOptions()
         self.cfs_metadata = CfsMetadata(self.log_file_path)
-        self.cf_names = {}
+        self.cfs_names = {}
         self.next_unknown_cf_name_suffix = None
 
-        # These entities need to support dynamic addition of cf-s
-        # The cf names will be added when they are detected during parsing
-        self.events_mngr = EventsMngr()
+        self.entry_idx = 0
+        self.log_entries, self.job_id_to_cf_name_map = \
+            self.parse_log_to_entries(log_file_path, log_lines)
+
+        self.events_mngr = EventsMngr(self.job_id_to_cf_name_map)
+        self.compactions_monitor = CompactionsMonitor()
+        self.files_monitor = DbFilesMonitor()
         self.warnings_mngr = WarningsMngr()
         self.stats_mngr = StatsMngr()
+        self.counters_and_histograms_mngr = CountersAndHistogramsMngr()
         self.not_parsed_entries = []
 
-        self.entry_idx = 0
-        self.log_entries = self.parse_log_to_entries(log_file_path, log_lines)
         self.parse_metadata()
         self.set_end_time()
         self.parse_rest_of_log()
@@ -176,21 +185,30 @@ class ParsedLog:
         # no need to take up the memory for that
         self.log_entries = None
 
+        utils.parsing_context.parsing_ends()
+        self.warnings_mngr.set_cfs_names_on_parsing_complete(
+            self.get_cfs_names())
+        logging.debug(f"Parsing of {self.log_file_path} Complete")
+
     def __str__(self):
         return f"ParsedLog ({self.log_file_path})"
 
     @staticmethod
     def parse_log_to_entries(log_file_path, log_lines):
         if len(log_lines) < 1:
-            raise defs_and_utils.EmptyLogFile(log_file_path)
+            raise utils.EmptyLogFile(log_file_path)
 
         # first line must be the beginning of a log entry
         if not LogEntry.is_entry_start(log_lines[0]):
-            raise defs_and_utils.InvalidLogFile(log_file_path)
+            raise utils.InvalidLogFile(log_file_path)
+
+        logging.debug("Parsing log to entries")
 
         # Failure to parse an entry should just skip that entry
         # (best effort)
-        log_entries = []
+        log_entries = list()
+        job_id_to_cf_name_map = dict()
+
         new_entry = None
         skip_until_next_entry_start = False
         for line_idx, line in enumerate(log_lines):
@@ -200,16 +218,18 @@ class ParsedLog:
                     if new_entry:
                         log_entries.append(new_entry.all_lines_added())
                     new_entry = LogEntry(line_idx, line)
+                    ParsedLog.add_job_id_to_cf_mapping_if_available(
+                        new_entry, job_id_to_cf_name_map)
                 else:
                     # To account for logs split into multiple lines
                     if new_entry:
                         new_entry.add_line(line)
                     else:
                         if not skip_until_next_entry_start:
-                            raise defs_and_utils.ParsingAssertion(
+                            raise utils.ParsingAssertion(
                                 "Bug while parsing log to entries.",
                                 log_file_path, line_idx)
-            except defs_and_utils.ParsingError as e:
+            except utils.ParsingError as e:
                 logging.error(str(e.value))
                 # Discarding the "bad" entry and skipping all lines until
                 # finding the start of the next one.
@@ -220,7 +240,24 @@ class ParsedLog:
         if new_entry:
             log_entries.append(new_entry.all_lines_added())
 
-        return log_entries
+        logging.debug("Completed Parsing log to entries")
+
+        return log_entries, job_id_to_cf_name_map
+
+    @staticmethod
+    def add_job_id_to_cf_mapping_if_available(entry, job_id_to_cf_name_map):
+        job_id = entry.get_job_id()
+        if not job_id:
+            return
+
+        cf_name = entry.get_cf_name()
+        if not cf_name:
+            return
+
+        if job_id in job_id_to_cf_name_map:
+            assert job_id_to_cf_name_map[job_id] == cf_name
+        else:
+            job_id_to_cf_name_map[job_id] = cf_name
 
     @staticmethod
     def find_next_options_entry(log_entries, start_entry_idx):
@@ -242,7 +279,7 @@ class ParsedLog:
             LogFileMetadata(self.log_entries[self.entry_idx:options_entry_idx],
                             self.entry_idx)
         if not self.metadata.is_valid():
-            raise defs_and_utils.InvalidLogFile(self.log_file_path)
+            raise utils.InvalidLogFile(self.log_file_path)
 
         self.entry_idx = options_entry_idx
 
@@ -250,7 +287,7 @@ class ParsedLog:
         # The first one is always "default" - NOT considered auto-generated
         if self.next_unknown_cf_name_suffix is None:
             self.next_unknown_cf_name_suffix = 1
-            return False, defs_and_utils.DEFAULT_CF_NAME
+            return False, utils.DEFAULT_CF_NAME
         else:
             next_cf_name = f"Unknown-CF-#{self.next_unknown_cf_name_suffix}"
             self.next_unknown_cf_name_suffix += 1
@@ -286,12 +323,12 @@ class ParsedLog:
     def find_support_info_start_index(log_entries, start_entry_idx):
         entry_idx = start_entry_idx
         while entry_idx < len(log_entries):
-            if re.findall(regexes.SUPPORT_INFO_START_LINE_REGEX,
+            if re.findall(regexes.SUPPORT_INFO_START_LINE,
                           log_entries[entry_idx].get_msg_lines()[0]):
                 return entry_idx
             entry_idx += 1
 
-        raise defs_and_utils.ParsingError(
+        raise utils.ParsingError(
             f"Failed finding Support Info. start-idx:{start_entry_idx}")
 
     def try_parse_as_cf_lifetime_entry(self):
@@ -318,7 +355,7 @@ class ParsedLog:
                                                        self.entry_idx,
                                                        support_info_entry_idx)
         if not options_dict:
-            raise defs_and_utils.ParsingError(
+            raise utils.ParsingError(
                 f"Empy db-wide options dictionary ({self}).",
                 self.get_curr_error_context())
 
@@ -343,11 +380,8 @@ class ParsedLog:
     def try_parse_as_warning_entries(self):
         entry = self.log_entries[self.entry_idx]
 
-        result, cf_name = self.warnings_mngr.try_adding_entry(entry)
+        result = self.warnings_mngr.try_adding_entry(entry)
         if result:
-            if cf_name is not None:
-                self.cfs_metadata.handle_cf_name_found_during_parsing(
-                    cf_name, entry)
             self.entry_idx += 1
 
         return result
@@ -355,13 +389,16 @@ class ParsedLog:
     def try_parse_as_event_entries(self):
         entry = self.get_curr_entry()
 
-        result, cf_name = self.events_mngr.try_adding_entry(entry)
+        result, event, cf_name = self.events_mngr.try_adding_entry(entry)
         if not result:
             return False
 
         if cf_name is not None:
-            self.cfs_metadata.handle_cf_name_found_during_parsing(cf_name,
-                                                                  entry)
+            self.cfs_metadata.handle_cf_name_found_during_parsing(
+                cf_name, entry)
+            self.compactions_monitor.new_event(event)
+            self.files_monitor.new_event(event)
+
         self.entry_idx += 1
 
         return True
@@ -376,6 +413,13 @@ class ParsedLog:
             for cf_name in cfs_names:
                 self.cfs_metadata.handle_cf_name_found_during_parsing(
                     cf_name, self.get_entry(entry_idx_on_entry))
+
+        return result
+
+    def try_parse_as_counters_and_histograms_stats_entries(self):
+        result, self.entry_idx = \
+            self.counters_and_histograms_mngr.try_adding_entries(
+                self.log_entries, self.entry_idx)
 
         return result
 
@@ -401,7 +445,12 @@ class ParsedLog:
                 if self.try_parse_as_stats_entries():
                     continue
 
-                self.not_parsed_entries.append(self.get_curr_entry())
+                if self.try_parse_as_counters_and_histograms_stats_entries():
+                    continue
+
+                if not self.compactions_monitor.consider_entry(
+                        self.get_curr_entry()):
+                    self.not_parsed_entries.append(self.get_curr_entry())
                 self.entry_idx += 1
 
         except AssertionError:
@@ -416,7 +465,6 @@ class ParsedLog:
 
     def update_my_entities_on_new_cf(self, cf_name):
         self.events_mngr.add_cf_name(cf_name)
-        self.warnings_mngr.add_cf_name(cf_name)
 
     def set_end_time(self):
         last_entry = self.log_entries[-1]
@@ -429,12 +477,12 @@ class ParsedLog:
     def get_metadata(self):
         return self.metadata
 
-    def get_cf_names(self):
+    def get_cfs_names(self):
         # Return only the names of cf-s which have been actually present in
         # the log (also implicitly, like "default")
-        return self.cfs_metadata.get_non_auto_generated_cf_names()
+        return self.cfs_metadata.get_non_auto_generated_cfs_names()
 
-    def get_cf_names_that_have_options(self):
+    def get_cfs_names_that_have_options(self):
         # Return only the names of cf-s for which options exist
         return self.db_options.get_cfs_names()
 
@@ -442,7 +490,7 @@ class ParsedLog:
         return self.cfs_metadata.get_auto_generated_cf_names()
 
     def get_num_cfs(self):
-        return len(self.get_cf_names())
+        return len(self.get_cfs_names())
 
     def get_database_options(self):
         return self.db_options
@@ -450,8 +498,17 @@ class ParsedLog:
     def get_events_mngr(self):
         return self.events_mngr
 
+    def get_compactions_monitor(self):
+        return self.compactions_monitor
+
     def get_stats_mngr(self):
         return self.stats_mngr
+
+    def get_counters_and_histograms_mngr(self):
+        return self.counters_and_histograms_mngr
+
+    def get_files_monitor(self):
+        return self.files_monitor
 
     def get_warnings_mngr(self):
         return self.warnings_mngr

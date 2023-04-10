@@ -12,15 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.'''
 
+import logging
 import re
 from dataclasses import dataclass
 from enum import Enum, auto
-import defs_and_utils
+
 import regexes
-import logging
+import utils
 
-
-get_error_context = defs_and_utils.get_error_context_from_entry
+get_error_context = utils.get_error_context_from_entry
 
 
 @dataclass
@@ -85,7 +85,7 @@ class CfsMetadata:
         return None, entry_idx
 
     def try_parse_as_drop_cf(self, entry):
-        cf_id_match = re.findall(regexes.DROP_CF_REGEX, entry.get_msg())
+        cf_id_match = re.findall(regexes.DROP_CF, entry.get_msg())
         if not cf_id_match:
             return False
 
@@ -96,7 +96,7 @@ class CfsMetadata:
         # e.g., auto-generated one)
         cf_info = self.get_cf_info_by_id(dropped_cf_id)
         if not cf_info:
-            logging.info(defs_and_utils.format_err_msg(
+            logging.info(utils.format_err_msg(
                 f"CF with Id {dropped_cf_id} "
                 f"dropped but no cf with matching id.", error_context=None,
                 entry=entry, file_path=self.log_file_path))
@@ -108,7 +108,7 @@ class CfsMetadata:
         return True
 
     def try_parse_as_recover_cf(self, entry):
-        cf_match = re.findall(regexes.RECOVERED_CF_REGEX, entry.get_msg())
+        cf_match = re.findall(regexes.RECOVERED_CF, entry.get_msg())
         if not cf_match:
             return False
 
@@ -121,7 +121,7 @@ class CfsMetadata:
         return True
 
     def try_parse_as_create_cf(self, entry):
-        cf_match = re.findall(regexes.CREATE_CF_REGEX, entry.get_msg())
+        cf_match = re.findall(regexes.CREATE_CF, entry.get_msg())
         if not cf_match:
             return False
 
@@ -166,7 +166,7 @@ class CfsMetadata:
 
         return None
 
-    def get_non_auto_generated_cf_names(self):
+    def get_non_auto_generated_cfs_names(self):
         return [cf_name for cf_name in self.cfs_info.keys() if not
                 self.cfs_info[cf_name].auto_generated]
 
@@ -192,41 +192,40 @@ class CfsMetadata:
 
     def validate_cf_exists(self, cf_name, entry):
         if cf_name not in self.cfs_info:
-            raise defs_and_utils.ParsingError(
+            raise utils.ParsingError(
                 f"cf ({cf_name}) doesn't exist.",
                 self.get_error_context(entry))
 
     def validate_cf_doesnt_exist(self, cf_name, entry):
         if cf_name in self.cfs_info:
-            raise defs_and_utils.ParsingError(
+            raise utils.ParsingError(
                 f"cf ({cf_name}) already exists.",
                 self.get_error_context(entry))
 
     def validate_known_cf_id(self, cf_id, entry):
         if not self.get_cf_info_by_id(cf_id):
-            raise defs_and_utils.ParsingError(
+            raise utils.ParsingError(
                 f"No CF has that id ({cf_id}).", self.get_error_context(entry))
 
     def validate_cf_id_unknown_or_same(self, cf_name, cf_id, entry):
         curr_cf_id = self.cfs_info[cf_name].id
         if curr_cf_id and curr_cf_id != int(cf_id):
-            raise defs_and_utils.ParsingError(
+            raise utils.ParsingError(
                 f"id ({cf_id}) of cf ({cf_name}) already exists.",
                 self.get_error_context(entry))
 
     def validate_cf_is_not_auto_generated(self, cf_name, entry):
         if self.cfs_info[cf_name].auto_generated:
-            raise defs_and_utils.ParsingError(
+            raise utils.ParsingError(
                     f"CF ({cf_name}) is auto-generated.",
                     self.get_error_context(entry))
 
     def validate_cf_wasnt_dropped(self, cf_info, entry):
         if cf_info.drop_time:
-            raise defs_and_utils.ParsingError(
+            raise utils.ParsingError(
                 f"CF ({cf_info.name}) already dropped at "
                 f"({cf_info.drop_time}).",
                 self.get_error_context(entry))
 
     def get_error_context(self, entry):
-        return defs_and_utils.get_error_context_from_entry(entry,
-                                                           self.log_file_path)
+        return utils.get_error_context_from_entry(entry, self.log_file_path)

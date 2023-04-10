@@ -12,20 +12,73 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.'''
 
-import re
-import regexes
-import defs_and_utils
-import pathlib
 import bisect
+import pathlib
+import re
+from dataclasses import dataclass
+
+import regexes
+import utils
+from database_options import DatabaseOptions
 from log_file import ParsedLog
-from database_options import DatabaseOptions, SANITIZED_NO_VALUE
+
+
+@dataclass
+class Version:
+    major: int
+    minor: int
+    patch: int
+
+    def __init__(self, version_str):
+        version_parts = re.findall(regexes.VERSION, version_str)
+        assert len(version_parts) == 1 and len(version_parts[0]) == 3
+        self.major = int(version_parts[0][0])
+        self.minor = int(version_parts[0][1])
+        self.patch = int(version_parts[0][2]) if version_parts[0][2] else None
+
+    def get_patch_for_comparison(self):
+        if self.patch is None:
+            return -1
+        return self.patch
+
+    def __eq__(self, other):
+        return self.major == other.major and \
+               self.minor == other.minor and \
+               self.get_patch_for_comparison() == \
+               other.get_patch_for_comparison()
+
+    def __lt__(self, other):
+        if self.major != other.major:
+            return self.major < other.major
+        elif self.minor != other.minor:
+            return self.minor < other.minor
+        else:
+            return self.get_patch_for_comparison() < \
+                   other.get_patch_for_comparison()
+
+    def __repr__(self):
+        if self.patch is not None:
+            patch = f".{self.patch}"
+        else:
+            patch = ""
+
+        return f"{self.major}.{self.minor}{patch}"
+
+
+@dataclass
+class BaselineLogFileInfo:
+    file_name: str
+    version: Version
+
+    def __lt__(self, other):
+        return self.version < other.version
 
 
 def find_all_baseline_log_files(baselines_logs_folder, product_name):
-    if product_name == defs_and_utils.ProductName.ROCKSDB:
-        logs_regex = regexes.ROCKSDB_BASELINE_LOG_FILE_REGEX
-    elif product_name == defs_and_utils.ProductName.SPEEDB:
-        logs_regex = regexes.SPEEDB_BASELINE_LOG_FILE_REGEX
+    if product_name == utils.ProductName.ROCKSDB:
+        logs_regex = regexes.ROCKSDB_BASELINE_LOG_FILE
+    elif product_name == utils.ProductName.SPEEDB:
+        logs_regex = regexes.SPEEDB_BASELINE_LOG_FILE
     else:
         assert False
 
@@ -36,8 +89,8 @@ def find_all_baseline_log_files(baselines_logs_folder, product_name):
         file_match = re.findall(logs_regex, file_name.name)
         if file_match:
             assert len(file_match) == 1
-            files.append(defs_and_utils.BaselineLogFileInfo(
-                file_name.name, defs_and_utils.Version(file_match[0])))
+            files.append(BaselineLogFileInfo(
+                file_name.name, Version(file_match[0])))
 
     files.sort()
     return files
@@ -45,7 +98,7 @@ def find_all_baseline_log_files(baselines_logs_folder, product_name):
 
 def find_closest_version_idx(baseline_versions, version):
     if isinstance(version, str):
-        version = defs_and_utils.Version(version)
+        version = Version(version)
 
     if baseline_versions[0] == version:
         return 0
@@ -76,23 +129,6 @@ def find_closest_baseline_log_file_name(baselines_logs_folder, product_name,
         return None
 
 
-def sanitize_baseline_options(baseline_options):
-    db_wide_options = ["statistics",
-                       "env",
-                       "info_log",
-                       "write_buffer_manager"]
-    cf_table_options = ["block_cache",
-                        "flush_block_policy_factory",
-                        "filter_policy"]
-
-    for option_name in db_wide_options:
-        baseline_options.set_db_wide_option(option_name, SANITIZED_NO_VALUE)
-    for option_name in cf_table_options:
-        baseline_options.set_cf_table_option(defs_and_utils.DEFAULT_CF_NAME,
-                                             option_name,
-                                             SANITIZED_NO_VALUE)
-
-
 def get_baseline_database_options(baselines_logs_folder,
                                   product_name,
                                   version_str):
@@ -104,15 +140,18 @@ def get_baseline_database_options(baselines_logs_folder,
         return None
 
     closest_baseline_log_file_name, closest_version = closest_baseline_info
-    baseline_log_path = defs_and_utils.get_file_path(
+    baseline_log_path = utils.get_file_path(
         baselines_logs_folder, closest_baseline_log_file_name)
 
     with baseline_log_path.open() as baseline_log_file:
         log_lines = baseline_log_file.readlines()
-        log_lines = [line.strip() for line in log_lines]
+        log_lines = [line for line in log_lines]
+
+        main_parsing_context = utils.parsing_context
         parsed_log = ParsedLog(str(baseline_log_path), log_lines)
+        utils.parsing_context = main_parsing_context
+
         baseline_options = parsed_log.get_database_options()
-        sanitize_baseline_options(baseline_options)
         return baseline_options, closest_version
 
 

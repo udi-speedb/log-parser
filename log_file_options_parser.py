@@ -14,13 +14,25 @@
 
 import logging
 import re
-from log_entry import LogEntry
+
 import regexes
-import defs_and_utils
+import utils
+from log_entry import LogEntry
 
 format_lines_range_from_entries_idxs = \
-    defs_and_utils.format_lines_range_from_entries_idxs
-format_line_num_from_entry = defs_and_utils.format_line_num_from_entry
+    utils.format_lines_range_from_entries_idxs
+format_line_num_from_entry = utils.format_line_num_from_entry
+
+
+TABLE_OPTIONS_TOPIC_TITLES = [("metadata_cache_options", "metadata_cache_"),
+                              ("block_cache_options", "block_cache_")]
+
+
+def get_table_options_topic_info(topic_name):
+    for topic_info in TABLE_OPTIONS_TOPIC_TITLES:
+        if topic_info[0] == topic_name:
+            return topic_info
+    return None
 
 
 class LogFileOptionsParser:
@@ -28,7 +40,7 @@ class LogFileOptionsParser:
     def try_parsing_as_options_entry(log_entry):
         assert isinstance(log_entry, LogEntry)
 
-        option_parts_match = re.findall(regexes.OPTION_LINE_REGEX,
+        option_parts_match = re.findall(regexes.OPTION_LINE,
                                         log_entry.get_msg())
         if len(option_parts_match) != 1 or len(option_parts_match[0]) != 2:
             return None
@@ -59,7 +71,7 @@ class LogFileOptionsParser:
         # first line has the "table_factory options:" prefix
         # example:
         # options:   flush_block_policy_factory: FlushBlockBySizePolicyFactory
-        option_parts_match = re.findall(regexes.TABLE_OPTIONS_START_LINE_REGEX,
+        option_parts_match = re.findall(regexes.TABLE_OPTIONS_START_LINE,
                                         options_lines[0])
         if len(option_parts_match) != 1 or len(option_parts_match[0]) != 2:
             return None
@@ -75,7 +87,7 @@ class LogFileOptionsParser:
             if option_name is None:
                 continue
             topic_info = \
-                defs_and_utils.get_table_options_topic_info(option_name)
+                get_table_options_topic_info(option_name)
             if topic_info is None:
                 options_dict[option_name] = option_value
                 line_idx += 1
@@ -90,7 +102,7 @@ class LogFileOptionsParser:
     @staticmethod
     def parse_table_options_line(line):
         option_parts_match = re.findall(
-            regexes.TABLE_OPTIONS_CONTINUATION_LINE_REGEX, line)
+            regexes.TABLE_OPTIONS_CONTINUATION_LINE, line)
         if not option_parts_match:
             return None, None
 
@@ -106,13 +118,13 @@ class LogFileOptionsParser:
                                           options_dict):
         topic_line = options_lines_to_parse[line_idx]
         topic_line_indentation_size =\
-            defs_and_utils.get_num_leading_spaces(topic_line)
+            utils.get_num_leading_spaces(topic_line)
         line_idx += 1
 
         while line_idx < len(options_lines_to_parse):
             checked_line = options_lines_to_parse[line_idx]
             checked_line_indentation_size = \
-                defs_and_utils.get_num_leading_spaces(checked_line)
+                utils.get_num_leading_spaces(checked_line)
             if checked_line_indentation_size <=   \
                     topic_line_indentation_size:
                 break
@@ -127,7 +139,7 @@ class LogFileOptionsParser:
 
     @staticmethod
     def try_parsing_as_cf_options_start_entry(log_entry):
-        parts = re.findall(regexes.CF_OPTIONS_START_REGEX, log_entry.get_msg())
+        parts = re.findall(regexes.CF_OPTIONS_START, log_entry.get_msg())
         if not parts or len(parts) != 1:
             return None
         # In case of match, we return the column-family name
@@ -142,10 +154,10 @@ class LogFileOptionsParser:
     @staticmethod
     def parse_db_wide_wbm_sub_pseudo_options(entry, options_dict):
         wbm_pseudo_options = \
-            re.findall(regexes.DB_WIDE_WBM_PSEUDO_OPTION_LINE_REGEX,
+            re.findall(regexes.DB_WIDE_WBM_PSEUDO_OPTION_LINE,
                        entry.get_msg(), re.MULTILINE)
         for pseudo_option_name, pseudo_option_value in wbm_pseudo_options:
-            options_dict[f"write_bufferr_manager_{pseudo_option_name}"] =\
+            options_dict[f"write_buffer_manager_{pseudo_option_name}"] =\
                 pseudo_option_value
 
     @staticmethod
@@ -172,7 +184,7 @@ class LogFileOptionsParser:
                 option_name, option_value = options_kv
                 options_dict[option_name] = option_value
                 if option_name == \
-                    defs_and_utils.\
+                    utils.\
                         DB_WIDE_WRITE_BUFFER_MANAGER_OPTIONS_NAME:
                     # Special case write buffer manager "Options"
                     LogFileOptionsParser.parse_db_wide_wbm_sub_pseudo_options(

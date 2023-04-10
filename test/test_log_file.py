@@ -12,13 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.'''
 
-import pytest
 import itertools
-import defs_and_utils
+
+import pytest
+
+import test.testing_utils as test_utils
+import utils
 from database_options import DatabaseOptions
 from log_file import LogFileMetadata, ParsedLog
 from test.sample_log_info import SampleLogInfo, SampleRolledLogInfo
-import test.test_utils as test_utils
 
 
 def test_empty_md():
@@ -30,7 +32,7 @@ def test_empty_md():
     assert md.get_start_time() is None
     assert md.get_end_time() is None
 
-    with pytest.raises(defs_and_utils.ParsingAssertion):
+    with pytest.raises(utils.ParsingAssertion):
         md.get_log_time_span_seconds()
 
 
@@ -57,7 +59,7 @@ def test_md_parse_product_and_version():
         assert md.get_product_name() == expected_values[i][0]
         assert md.get_version() == expected_values[i][1]
 
-    with pytest.raises(defs_and_utils.ParsingError):
+    with pytest.raises(utils.ParsingError):
         lines_with_duplicates = lines[0:2]
         entries_with_duplicates =\
             test_utils.lines_to_entries(lines_with_duplicates)
@@ -91,7 +93,7 @@ def test_md_parse_git_hash():
         assert md.get_git_hash() == expected_values[i]
 
     # Test duplicates
-    with pytest.raises(defs_and_utils.ParsingError):
+    with pytest.raises(utils.ParsingError):
         lines_with_duplicates = lines[0:2]
         entries_with_duplicates =\
             test_utils.lines_to_entries(lines_with_duplicates)
@@ -125,7 +127,7 @@ def test_md_parse_db_session_id():
         assert md.get_db_session_id() == expected_values[i]
 
     # Test duplicates
-    with pytest.raises(defs_and_utils.ParsingError):
+    with pytest.raises(utils.ParsingError):
         lines_with_duplicates = lines[0:2]
         entries_with_duplicates =\
             test_utils.lines_to_entries(lines_with_duplicates)
@@ -160,16 +162,20 @@ def test_parse_log_to_entries():
     Entry 3 Continuation 1
     '''.splitlines() # noqa
 
-    entries = ParsedLog.parse_log_to_entries("DummyPath", lines[:1])
+    entries, job_id_to_cf_name_map =\
+        ParsedLog.parse_log_to_entries("DummyPath", lines[:1])
     assert len(entries) == 1
+    assert job_id_to_cf_name_map == {}
     assert entries[0].get_msg() == "Entry 1"
 
-    entries = ParsedLog.parse_log_to_entries("DummyPath", lines[:2])
+    entries, job_id_to_cf_name_map = \
+        ParsedLog.parse_log_to_entries("DummyPath", lines[:2])
     assert len(entries) == 2
     assert entries[0].get_msg() == "Entry 1"
     assert entries[1].get_msg() == "Entry 2"
 
-    entries = ParsedLog.parse_log_to_entries("DummyPath", lines)
+    entries, job_id_to_cf_name_map = \
+        ParsedLog.parse_log_to_entries("DummyPath", lines)
     assert len(entries) == 3
 
     assert entries[1].get_msg_lines() == ["Entry 2",
@@ -209,7 +215,7 @@ def test_parse_metadata():
 
     assert metadata.get_start_time() == "2022/11/24-15:58:04.758352"
 
-    with pytest.raises(defs_and_utils.ParsingAssertion):
+    with pytest.raises(utils.ParsingAssertion):
         metadata.get_log_time_span_seconds()
 
     assert str(metadata) == \
@@ -236,18 +242,18 @@ def test_parse_metadata1():
     assert metadata.get_end_time() == SampleLogInfo.END_TIME
 
     expected_time_span = \
-        (defs_and_utils.parse_date_time(SampleLogInfo.END_TIME) -
-         defs_and_utils.parse_date_time(SampleLogInfo.START_TIME)).seconds
+        (utils.parse_time_str(SampleLogInfo.END_TIME) -
+         utils.parse_time_str(SampleLogInfo.START_TIME)).seconds
     assert metadata.get_log_time_span_seconds() == expected_time_span
 
 
 def test_parse_options():
     parsed_log = test_utils.create_parsed_log(SampleLogInfo.FILE_PATH)
-    assert parsed_log.get_cf_names() == SampleLogInfo.CF_NAMES
+    assert parsed_log.get_cfs_names() == SampleLogInfo.CF_NAMES
 
     actual_db_options = parsed_log.get_database_options()
     assert actual_db_options.are_db_wide_options_set()
-    assert actual_db_options.get_cfs_names() == parsed_log.get_cf_names()
+    assert actual_db_options.get_cfs_names() == parsed_log.get_cfs_names()
 
     # Assuming LogFileOptionsParser is fully tested and may be used
     expected_db_options = DatabaseOptions()
@@ -271,7 +277,7 @@ def test_parse_options():
 
 def test_parse_options_in_rolled_log():
     parsed_log = test_utils.create_parsed_log(SampleRolledLogInfo.FILE_PATH)
-    assert parsed_log.get_cf_names() == SampleRolledLogInfo.CF_NAMES
+    assert parsed_log.get_cfs_names() == SampleRolledLogInfo.CF_NAMES
     assert parsed_log.get_auto_generated_cf_names() ==\
            SampleRolledLogInfo.AUTO_GENERATED_CF_NAMES
 
@@ -320,10 +326,10 @@ def test_parse_db_wide_stats():
 
 
 def test_empty_log_file():
-    with pytest.raises(defs_and_utils.EmptyLogFile):
+    with pytest.raises(utils.EmptyLogFile):
         ParsedLog("DummyPath", [])
 
 
 def test_unexpected_1st_log_line():
-    with pytest.raises(defs_and_utils.InvalidLogFile):
+    with pytest.raises(utils.InvalidLogFile):
         ParsedLog("DummyPath", ["Dummy Line", "Another Dummy Line"])

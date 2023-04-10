@@ -14,7 +14,7 @@
 
 import pytest
 from log_entry import LogEntry
-import defs_and_utils
+import utils
 
 
 def test_is_entry_start():
@@ -45,11 +45,11 @@ def test_basic_single_line():
     assert entry.get_warning_type() is None
     assert entry.have_all_lines_been_added()
 
-    with pytest.raises(defs_and_utils.ParsingAssertion):
+    with pytest.raises(utils.ParsingAssertion):
         entry.add_line(log_line2, last_line=True)
-    with pytest.raises(defs_and_utils.ParsingAssertion):
+    with pytest.raises(utils.ParsingAssertion):
         entry.add_line(log_line2, last_line=False)
-    with pytest.raises(defs_and_utils.ParsingAssertion):
+    with pytest.raises(utils.ParsingAssertion):
         entry.all_lines_added()
 
 
@@ -62,7 +62,7 @@ def test_warn_single_line():
     assert "2022/04/17-15:24:51.089890" == entry.get_time()
     assert entry.get_code_pos() == "/column_family.cc:932"
     assert entry.is_warn_msg()
-    assert entry.get_warning_type() == defs_and_utils.WarningType.WARN
+    assert entry.get_warning_type() == utils.WarningType.WARN
 
 
 def test_multi_line_entry():
@@ -83,7 +83,7 @@ def test_multi_line_entry():
     assert entry.get_lines_idxs_range() == (100, 102)
 
     # Attempting to add the start of a new entry
-    with pytest.raises(defs_and_utils.ParsingAssertion):
+    with pytest.raises(utils.ParsingAssertion):
         entry.add_line(log_line5, last_line=True)
 
     assert not entry.have_all_lines_been_added()
@@ -96,19 +96,19 @@ def test_multi_line_entry():
     entry.all_lines_added()
     assert entry.have_all_lines_been_added()
 
-    with pytest.raises(defs_and_utils.ParsingAssertion):
+    with pytest.raises(utils.ParsingAssertion):
         entry.all_lines_added()
 
-    with pytest.raises(defs_and_utils.ParsingAssertion):
+    with pytest.raises(utils.ParsingAssertion):
         entry.add_line(log_line4, last_line=True)
-    with pytest.raises(defs_and_utils.ParsingAssertion):
+    with pytest.raises(utils.ParsingAssertion):
         entry.add_line(log_line4, last_line=False)
 
 
 def test_invalid_entry_start():
-    with pytest.raises(defs_and_utils.ParsingAssertion):
+    with pytest.raises(utils.ParsingAssertion):
         LogEntry(10, "Not an entry start line")
 
     log_line = "2022/11/24-15:58:04.758402"
-    with pytest.raises(defs_and_utils.ParsingError):
+    with pytest.raises(utils.ParsingError):
         LogEntry(10, log_line)

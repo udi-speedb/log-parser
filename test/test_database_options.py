@@ -13,11 +13,12 @@
 # limitations under the License.'''
 
 import pytest
-import defs_and_utils
-from database_options import DatabaseOptions, FullNamesOptionsDict, \
-    SectionType, OptionsDiff, CfsOptionsDiff
-import database_options
 
+import database_options
+import utils
+from database_options import DatabaseOptions, FullNamesOptionsDict, \
+    SectionType, OptionsDiff, CfsOptionsDiff, SANITIZED_NO_VALUE, \
+    RAW_NULL_PTR, SANITIZED_NULL_PTR, sanitized_to_raw_ptr_value
 
 default = 'default'
 cf1 = 'cf1'
@@ -25,12 +26,12 @@ cf2 = 'cf2'
 cf3 = 'cf3'
 
 EMPTY_FULL_NAMES_OPTIONS_DICT = FullNamesOptionsDict()
-DB_WIDE_CF_NAME = defs_and_utils.NO_COL_FAMILY
+DB_WIDE_CF_NAME = utils.NO_CF
 
 
 baseline_options = {
-    'DBOptions.stats_dump_freq_sec': {defs_and_utils.NO_COL_FAMILY: '20'},
-    'DBOptions.enable_pipelined_write': {defs_and_utils.NO_COL_FAMILY: '0'},
+    'DBOptions.stats_dump_freq_sec': {utils.NO_CF: '20'},
+    'DBOptions.enable_pipelined_write': {utils.NO_CF: '0'},
     'CFOptions.write_buffer_size': {
         default: '1024000',
         cf1: '128000',
@@ -39,13 +40,14 @@ baseline_options = {
     'TableOptions.BlockBasedTable.index_type': {cf2: '1'},
     'TableOptions.BlockBasedTable.format_version': {cf1: '4', cf2: '5'},
     'TableOptions.BlockBasedTable.block_size': {cf1: '4096', cf2: '4096'},
-    'DBOptions.use_fsync': {defs_and_utils.NO_COL_FAMILY: 'true'},
+    'DBOptions.use_fsync': {utils.NO_CF: 'true'},
     'DBOptions.max_log_file_size':
-        {defs_and_utils.NO_COL_FAMILY: '128000000'}
+        {utils.NO_CF: '128000000'},
+    'DBOptions.ptr_option1': {utils.NO_CF: '0x12345678'}
 }
 new_options = {
-    'bloom_bits': {defs_and_utils.NO_COL_FAMILY: '4'},
-    'DBOptions.enable_pipelined_write': {defs_and_utils.NO_COL_FAMILY: 'True'},
+    'bloom_bits': {utils.NO_CF: '4'},
+    'DBOptions.enable_pipelined_write': {utils.NO_CF: 'True'},
     'CFOptions.write_buffer_size': {
         default: '128000000',
         cf1: '128000',
@@ -54,12 +56,19 @@ new_options = {
     'TableOptions.BlockBasedTable.checksum': {cf1: 'true'},
     'TableOptions.BlockBasedTable.format_version': {cf1: '5', cf2: '5'},
     'TableOptions.BlockBasedTable.block_size': {cf1: '4096', cf2: '4096'},
-    'DBOptions.use_fsync': {defs_and_utils.NO_COL_FAMILY: 'true'},
-    'DBOptions.max_log_file_size': {defs_and_utils.NO_COL_FAMILY: '0'}
+    'DBOptions.use_fsync': {utils.NO_CF: 'true'},
+    'DBOptions.max_log_file_size': {utils.NO_CF: '0'},
+    'DBOptions.ptr_option1': {utils.NO_CF: '0x55555555'}
 }
 
 baseline = FullNamesOptionsDict(baseline_options)
 new = FullNamesOptionsDict(new_options)
+
+
+def test_sanitized_to_raw_ptr_value():
+    assert sanitized_to_raw_ptr_value(SANITIZED_NULL_PTR) == RAW_NULL_PTR
+    assert sanitized_to_raw_ptr_value("Pointer (0x1234)") == '0x1234'
+    assert sanitized_to_raw_ptr_value("Pointer (0xa0FAA55)") == '0xa0FAA55'
 
 
 def test_extract_section_type():
@@ -73,7 +82,7 @@ def test_extract_section_type():
         "TableOptions.BlockBasedTable.option-name1") ==\
         "TableOptions.BlockBasedTable"
 
-    with pytest.raises(defs_and_utils.ParsingError):
+    with pytest.raises(utils.ParsingError):
         SectionType.extract_section_type("Dummy.option-name1")
 
 
@@ -81,13 +90,13 @@ def test_misc_option_name_utils():
     # parse_full_option_name
     assert database_options.parse_full_option_name("Version.option-name1") \
            == ("Version", "option-name1")
-    with pytest.raises(defs_and_utils.ParsingError):
+    with pytest.raises(utils.ParsingError):
         SectionType.extract_section_type("Dummy.option-name1")
 
     # get_full_option_name
     assert database_options.get_full_option_name("DBOptions", "option1") == \
            "DBOptions.option1"
-    with pytest.raises(defs_and_utils.ParsingError):
+    with pytest.raises(utils.ParsingError):
         database_options.get_full_option_name("Dummy", "option-name1")
 
     # get_db_wide_full_option_name
@@ -97,13 +106,13 @@ def test_misc_option_name_utils():
     # extract_option_name
     assert database_options.extract_option_name("DBOptions.option1") == \
            "option1"
-    with pytest.raises(defs_and_utils.ParsingError):
+    with pytest.raises(utils.ParsingError):
         database_options.extract_option_name("Dummy.option-name1")
 
     # extract_db_wide_option_name
     assert database_options.extract_db_wide_option_name("DBOptions.option1")\
            == "option1"
-    with pytest.raises(defs_and_utils.ParsingError):
+    with pytest.raises(utils.ParsingError):
         database_options.extract_db_wide_option_name("CFOptions.option1")
 
     # get_cf_full_option_name
@@ -113,7 +122,7 @@ def test_misc_option_name_utils():
     # extract_db_wide_option_name
     assert database_options.extract_cf_option_name("CFOptions.option1")\
            == "option1"
-    with pytest.raises(defs_and_utils.ParsingError):
+    with pytest.raises(utils.ParsingError):
         database_options.extract_cf_option_name("DBOptions.option1")
 
     # get_cf_table_full_option_name
@@ -123,37 +132,41 @@ def test_misc_option_name_utils():
     # extract_db_wide_option_name
     assert database_options.extract_cf_table_option_name(
         "TableOptions.BlockBasedTable.option1") == "option1"
-    with pytest.raises(defs_and_utils.ParsingError):
+    with pytest.raises(utils.ParsingError):
         database_options.extract_cf_table_option_name("DBOptions.option1")
 
 
 def test_misc_options_sanitization_utils():
     # check_and_sanitize_if_no_value
-    assert database_options.check_and_sanitize_if_no_value(None) == \
-           (True, "No Value")
-    assert database_options.check_and_sanitize_if_no_value("None") == \
-           (True, "No Value")
-    assert database_options.check_and_sanitize_if_no_value("NONE") == \
-           (True, "No Value")
-    assert database_options.check_and_sanitize_if_no_value("(nil)") == \
-           (True, "No Value")
-    assert database_options.check_and_sanitize_if_no_value("nil") == \
-           (True, "No Value")
-    assert database_options.check_and_sanitize_if_no_value("nullptr") == \
-           (True, "No Value")
-    assert database_options.check_and_sanitize_if_no_value("null") == \
-           (True, "No Value")
-    assert database_options.check_and_sanitize_if_no_value("NullPtr") == \
-           (True, "No Value")
+    assert database_options.check_and_sanitize_if_null_ptr(None) == \
+           (False, None)
+    assert database_options.check_and_sanitize_if_null_ptr("None") == \
+           (True, SANITIZED_NULL_PTR)
+    assert database_options.check_and_sanitize_if_null_ptr("NONE") == \
+           (True, SANITIZED_NULL_PTR)
+    assert database_options.check_and_sanitize_if_null_ptr("(nil)") == \
+           (True, SANITIZED_NULL_PTR)
+    assert database_options.check_and_sanitize_if_null_ptr("nil") == \
+           (True, SANITIZED_NULL_PTR)
+    assert database_options.check_and_sanitize_if_null_ptr("nullptr") == \
+           (True, SANITIZED_NULL_PTR)
+    assert database_options.check_and_sanitize_if_null_ptr("null") == \
+           (True, SANITIZED_NULL_PTR)
+    assert database_options.check_and_sanitize_if_null_ptr("NullPtr") == \
+           (True, SANITIZED_NULL_PTR)
+    assert database_options.check_and_sanitize_if_null_ptr("0x0") == \
+           (True, SANITIZED_NULL_PTR)
 
-    assert database_options.check_and_sanitize_if_no_value("") == \
+    assert database_options.check_and_sanitize_if_null_ptr("") == \
            (False, "")
-    assert database_options.check_and_sanitize_if_no_value("XXX") == \
+    assert database_options.check_and_sanitize_if_null_ptr("XXX") == \
            (False, "XXX")
-    assert database_options.check_and_sanitize_if_no_value(0) == \
+    assert database_options.check_and_sanitize_if_null_ptr(0) == \
            (False, 0)
-    assert database_options.check_and_sanitize_if_no_value(False) == \
+    assert database_options.check_and_sanitize_if_null_ptr(False) == \
            (False, False)
+    assert database_options.check_and_sanitize_if_null_ptr("0x1234") == \
+           (False, "0x1234")
 
     # is_bool_value
     assert database_options.check_and_sanitize_if_bool_value(
@@ -168,7 +181,6 @@ def test_misc_options_sanitization_utils():
         "false", include_int=False) == (True, "False")
     assert database_options.check_and_sanitize_if_bool_value(
         "FALSE", include_int=False) == (True, "False")
-
     assert database_options.check_and_sanitize_if_bool_value(
         0, include_int=False) == (False, 0)
     assert database_options.check_and_sanitize_if_bool_value(
@@ -178,14 +190,28 @@ def test_misc_options_sanitization_utils():
     assert database_options.check_and_sanitize_if_bool_value(
         1, include_int=True) == (True, "True")
 
+    assert database_options.check_and_sanitize_if_pointer_value(None) == \
+           (False, None)
+    assert database_options.check_and_sanitize_if_pointer_value("(nil)") ==\
+           (False, "(nil)")
+    assert database_options.check_and_sanitize_if_pointer_value(0) ==\
+           (False, 0)
+    assert database_options.check_and_sanitize_if_pointer_value("0x0") ==\
+           (False, "0x0")
+    assert database_options.check_and_sanitize_if_pointer_value("0x123") ==\
+           (True, "Pointer (0x123)")
+
     # get_sanitized_value
-    assert database_options.get_sanitized_value(None) == "No Value"
-    assert database_options.get_sanitized_value("None") == "No Value"
+    assert database_options.get_sanitized_value(None) == SANITIZED_NO_VALUE
+    assert database_options.get_sanitized_value("None") == SANITIZED_NULL_PTR
+    assert database_options.get_sanitized_value("None") == SANITIZED_NULL_PTR
+    assert database_options.get_sanitized_value("0x0") == SANITIZED_NULL_PTR
     assert database_options.get_sanitized_value(True) == "True"
     assert database_options.get_sanitized_value(False) == "False"
     assert database_options.get_sanitized_value(False) == "False"
     assert database_options.get_sanitized_value("False") == "False"
     assert database_options.get_sanitized_value("100") == "100"
+    assert database_options.get_sanitized_value("0x123") == "Pointer (0x123)"
 
     # get_sanitized_options_diff
     assert database_options.are_non_sanitized_values_different(0, 1)
@@ -206,34 +232,39 @@ def test_misc_options_sanitization_utils():
     assert not database_options.are_non_sanitized_values_different(1, "TRUE")
 
     assert not database_options.are_non_sanitized_values_different(None, None)
-    assert not database_options.are_non_sanitized_values_different(None, "nil")
+    assert database_options.are_non_sanitized_values_different(None, "nil")
     assert database_options.are_non_sanitized_values_different(None, "False")
     assert database_options.are_non_sanitized_values_different(False, None)
 
+    assert not database_options.are_non_sanitized_values_different("0x0",
+                                                                   "(nil)")
+    assert not database_options.are_non_sanitized_values_different("0x1234",
+                                                                   "0x5678")
+    assert database_options.are_non_sanitized_values_different("0x0", "0x5678")
+
     # get_sanitized_options_diff
-    database_options.get_sanitized_options_diff("None", None) == {
-        "Base": "No Value",
-        "New": "No Value"}
+    assert database_options.get_sanitized_options_diff(
+        "None", None, expect_diff=False) == \
+        (True, SANITIZED_NULL_PTR, SANITIZED_NO_VALUE)
 
-    database_options.get_sanitized_options_diff("None", "false") == {
-        "Base": "No Value",
-        "New": "False"}
+    assert database_options.get_sanitized_options_diff(
+        "None", "false", expect_diff=True) == (SANITIZED_NULL_PTR, "False")
 
-    database_options.get_sanitized_options_diff("false", True) == {
-        "Base": "False",
-        "New": "True"}
+    assert database_options.get_sanitized_options_diff(
+        "false", True, expect_diff=True) == ("False", "True")
 
-    database_options.get_sanitized_options_diff(0, True) == {
-        "Base": 0,
-        "New": "True"}
+    assert database_options.get_sanitized_options_diff(
+        0, True, expect_diff=True) == ("False", "True")
 
-    database_options.get_sanitized_options_diff(0, 1) == {
-        "Base": 0,
-        "New": 1}
+    assert database_options.get_sanitized_options_diff(
+        0, 1, expect_diff=True) == (0, 1)
 
-    database_options.get_sanitized_options_diff(0, "1") == {
-        "Base": 0,
-        "New": "1"}
+    assert database_options.get_sanitized_options_diff(
+        0, "1", expect_diff=True) == (0, "1")
+
+    assert database_options.get_sanitized_options_diff(
+        "0x1234", "0x5678", expect_diff=False) == \
+        (False, "Pointer (0x1234)", "Pointer (0x5678)")
 
 
 def test_full_name_options_dict():
@@ -395,8 +426,8 @@ def test_set_db_wide_options():
     input_dict = {"manual_wal_flush": "false",
                   "db_write_buffer_size": "0"}
     expected_options = {
-        'DBOptions.manual_wal_flush': {defs_and_utils.NO_COL_FAMILY: 'False'},
-        'DBOptions.db_write_buffer_size': {defs_and_utils.NO_COL_FAMILY: '0'},
+        'DBOptions.manual_wal_flush': {utils.NO_CF: 'False'},
+        'DBOptions.db_write_buffer_size': {utils.NO_CF: '0'},
     }
 
     db_options = DatabaseOptions()
@@ -518,6 +549,53 @@ def test_set_cf_options():
             expected_cf2_display_table_options)
 
 
+def test_get_unified_options():
+    get_unified = DatabaseOptions.get_unified_cfs_options
+
+    assert get_unified({}) == ({}, {})
+
+    cf1_options =\
+        FullNamesOptionsDict({'CFOptions.write_buffer_size': {cf1: 1000}})
+    cfs_options = {cf1: cf1_options}
+    assert get_unified(cfs_options) == \
+           ({"CFOptions.write_buffer_size": 1000},
+            {cf1: {}})
+
+    cf2_options =\
+        FullNamesOptionsDict({'CFOptions.write_buffer_size': {cf2: 1000}})
+    cfs_options = {cf1: cf1_options, cf2: cf2_options}
+    assert get_unified(cfs_options) == \
+           ({"CFOptions.write_buffer_size": 1000},
+            {cf1: {}, cf2: {}})
+
+    cf2_options.set_cf_option(cf2, "write_buffer_size", 2000)
+    assert get_unified(cfs_options) == \
+           ({},
+            {cf1: {"CFOptions.write_buffer_size": 1000},
+             cf2: {"CFOptions.write_buffer_size": 2000}})
+
+    cf1_options.set_cf_option(cf1, "cf1_only_option", "1234")
+    assert get_unified(cfs_options) == \
+           ({},
+            {cf1: {"CFOptions.write_buffer_size": 1000,
+                   "CFOptions.cf1_only_option": "1234"},
+             cf2: {"CFOptions.write_buffer_size": 2000}})
+
+    cf2_options.set_cf_option(cf2, "cf2_only_option", "5678")
+    assert get_unified(cfs_options) == \
+           ({},
+            {cf1: {"CFOptions.write_buffer_size": 1000,
+                   "CFOptions.cf1_only_option": "1234"},
+             cf2: {"CFOptions.write_buffer_size": 2000,
+                   "CFOptions.cf2_only_option": "5678"}})
+
+    cf2_options.set_cf_option(cf2, "write_buffer_size", 1000)
+    assert get_unified(cfs_options) == \
+           ({"CFOptions.write_buffer_size": 1000},
+            {cf1: {"CFOptions.cf1_only_option": "1234"},
+             cf2: {"CFOptions.cf2_only_option": "5678"}})
+
+
 def test_options_diff_class():
     diff = OptionsDiff(baseline_options, new_options)
     assert diff.get_diff_dict() == {}
@@ -527,8 +605,8 @@ def test_options_diff_class():
     diff.diff_between(default, 'CFOptions.write_buffer_size')
 
     assert diff.get_diff_dict() == {
-        'CFOptions.write_buffer_size': {cf2: ('128000000', "No Value"),
-                                        cf3: ("No Value", '128000000'),
+        'CFOptions.write_buffer_size': {cf2: ('128000000', SANITIZED_NO_VALUE),
+                                        cf3: (SANITIZED_NO_VALUE, '128000000'),
                                         default: ('1024000', '128000000')}
     }
 
@@ -536,19 +614,21 @@ def test_options_diff_class():
 def test_get_options_diff():
     expected_diff = {
         'DBOptions.stats_dump_freq_sec':
-            {defs_and_utils.NO_COL_FAMILY: ('20', "No Value")},
+            {utils.NO_CF: ('20', SANITIZED_NO_VALUE)},
         'DBOptions.enable_pipelined_write':
-            {defs_and_utils.NO_COL_FAMILY: ('False', 'True')},
-        'bloom_bits': {defs_and_utils.NO_COL_FAMILY: ("No Value", '4')},
+            {utils.NO_CF: ('False', 'True')},
+        'bloom_bits': {utils.NO_CF: (SANITIZED_NO_VALUE, '4')},
         'CFOptions.write_buffer_size': {
             default: ('1024000', '128000000'),
-            cf2: ('128000000', "No Value"),
-            cf3: ("No Value", '128000000')},
-        'TableOptions.BlockBasedTable.index_type': {'cf2': ('1', "No Value")},
-        'TableOptions.BlockBasedTable.checksum': {cf1: ("No Value", 'True')},
+            cf2: ('128000000', SANITIZED_NO_VALUE),
+            cf3: (SANITIZED_NO_VALUE, '128000000')},
+        'TableOptions.BlockBasedTable.index_type':
+            {'cf2': ('1', SANITIZED_NO_VALUE)},
+        'TableOptions.BlockBasedTable.checksum':
+            {cf1: (SANITIZED_NO_VALUE, 'True')},
         'TableOptions.BlockBasedTable.format_version': {'cf1': ('4', '5')},
         'DBOptions.max_log_file_size':
-            {defs_and_utils.NO_COL_FAMILY: ('128000000', '0')}
+            {utils.NO_CF: ('128000000', '0')}
     }
 
     full_name_baseline_dict = FullNamesOptionsDict(baseline_options)
@@ -574,10 +654,11 @@ def test_cfs_options_diff_class():
 def test_get_db_wide_options_diff():
     assert DatabaseOptions.get_db_wide_options_diff(baseline, baseline) is None
 
-    expected_diff = {'bloom_bits': ("No Value", '4'),
+    expected_diff = {'bloom_bits': (SANITIZED_NO_VALUE, '4'),
                      'DBOptions.enable_pipelined_write': ('False', 'True'),
                      'DBOptions.max_log_file_size': ('128000000', '0'),
-                     'DBOptions.stats_dump_freq_sec': ('20', "No Value"),
+                     'DBOptions.stats_dump_freq_sec':
+                         ('20', SANITIZED_NO_VALUE),
                      CfsOptionsDiff.CF_NAMES_KEY:
                          {"Base": 'DB_WIDE',
                           "New": 'DB_WIDE'}}
@@ -588,8 +669,8 @@ def test_get_db_wide_options_diff():
 
 def test_get_cfs_options_diff():
     assert DatabaseOptions.get_cfs_options_diff(
-        baseline, defs_and_utils.NO_COL_FAMILY,
-        baseline, defs_and_utils.NO_COL_FAMILY) is None
+        baseline, utils.NO_CF,
+        baseline, utils.NO_CF) is None
     assert DatabaseOptions.get_cfs_options_diff(baseline, default,
                                                 baseline, default) is None
 
@@ -601,8 +682,8 @@ def test_get_cfs_options_diff():
                                                 baseline, cf3) is None
 
     assert DatabaseOptions.get_cfs_options_diff(
-        new, defs_and_utils.NO_COL_FAMILY,
-        new, defs_and_utils.NO_COL_FAMILY) is None
+        new, utils.NO_CF,
+        new, utils.NO_CF) is None
 
     assert DatabaseOptions.get_cfs_options_diff(new, default,
                                                 new, default) is None
@@ -626,9 +707,10 @@ def test_get_cfs_options_diff():
             {"Base": default,
              "New": cf1},
         'CFOptions.write_buffer_size': ('1024000', '128000'),
-        'TableOptions.BlockBasedTable.checksum': ("No Value", 'True'),
-        'TableOptions.BlockBasedTable.format_version': ("No Value", '5'),
-        'TableOptions.BlockBasedTable.block_size': ("No Value", '4096')
+        'TableOptions.BlockBasedTable.checksum': (SANITIZED_NO_VALUE, 'True'),
+        'TableOptions.BlockBasedTable.format_version':
+            (SANITIZED_NO_VALUE, '5'),
+        'TableOptions.BlockBasedTable.block_size': (SANITIZED_NO_VALUE, '4096')
     }
     assert DatabaseOptions.get_cfs_options_diff(baseline, default,
                                                 new, cf1) == \
@@ -639,9 +721,10 @@ def test_get_cfs_options_diff():
             {"Base": cf1,
              "New": default},
         'CFOptions.write_buffer_size': ('128000', '1024000'),
-        'TableOptions.BlockBasedTable.checksum': ('True', "No Value"),
-        'TableOptions.BlockBasedTable.format_version': ('5', "No Value"),
-        'TableOptions.BlockBasedTable.block_size': ('4096', "No Value")
+        'TableOptions.BlockBasedTable.checksum': ('True', SANITIZED_NO_VALUE),
+        'TableOptions.BlockBasedTable.format_version':
+            ('5', SANITIZED_NO_VALUE),
+        'TableOptions.BlockBasedTable.block_size': ('4096', SANITIZED_NO_VALUE)
     }
     assert DatabaseOptions.get_cfs_options_diff(new, cf1,
                                                 baseline, default) == \
@@ -651,8 +734,8 @@ def test_get_cfs_options_diff():
         CfsOptionsDiff.CF_NAMES_KEY:
             {"Base": cf2,
              "New": cf2},
-        'CFOptions.write_buffer_size': ('128000000', "No Value"),
-        'TableOptions.BlockBasedTable.index_type': ('1', "No Value"),
+        'CFOptions.write_buffer_size': ('128000000', SANITIZED_NO_VALUE),
+        'TableOptions.BlockBasedTable.index_type': ('1', SANITIZED_NO_VALUE),
 
     }
     assert DatabaseOptions.get_cfs_options_diff(baseline, cf2,
@@ -663,7 +746,61 @@ def test_get_cfs_options_diff():
         CfsOptionsDiff.CF_NAMES_KEY:
             {"Base": cf3,
              "New": cf3},
-        'CFOptions.write_buffer_size': ("No Value", '128000000')}
+        'CFOptions.write_buffer_size': (SANITIZED_NO_VALUE, '128000000')}
     assert DatabaseOptions.get_cfs_options_diff(baseline, cf3,
                                                 new, cf3) == \
            expected_diff
+
+
+def test_get_unified_cfs_diffs():
+    cfs_diffs = {}
+    assert DatabaseOptions.get_unified_cfs_diffs(cfs_diffs) == ({}, {})
+
+    cf1_vs_default_diff = {
+        CfsOptionsDiff.CF_NAMES_KEY:
+            {"Base": default,
+             "New": cf1},
+        'CFOptions.write_buffer_size': ('1024000', '128000'),
+    }
+    cfs_diffs = [cf1_vs_default_diff]
+    assert DatabaseOptions.get_unified_cfs_diffs(cfs_diffs) == (
+        {'CFOptions.write_buffer_size': ('1024000', '128000')},
+        [{CfsOptionsDiff.CF_NAMES_KEY: {"Base": default, "New": cf1}}])
+
+    cf2_vs_default_diff = {
+        CfsOptionsDiff.CF_NAMES_KEY:
+            {"Base": default,
+             "New": cf2},
+        'CFOptions.write_buffer_size': ('1024000', '128000'),
+    }
+    cfs_diffs = [cf1_vs_default_diff, cf2_vs_default_diff]
+    assert DatabaseOptions.get_unified_cfs_diffs(cfs_diffs) == (
+        {'CFOptions.write_buffer_size': ('1024000', '128000')},
+        [{CfsOptionsDiff.CF_NAMES_KEY: {"Base": default, "New": cf1}},
+         {CfsOptionsDiff.CF_NAMES_KEY: {"Base": default, "New": cf2}}])
+
+    cf1_vs_default_diff['CFOptions.write_buffer_size'] = (1000, 2000)
+    assert DatabaseOptions.get_unified_cfs_diffs(cfs_diffs) == (
+        {},
+        [{CfsOptionsDiff.CF_NAMES_KEY: {"Base": default, "New": cf1},
+          'CFOptions.write_buffer_size': (1000, 2000)},
+         {CfsOptionsDiff.CF_NAMES_KEY: {"Base": default, "New": cf2},
+          'CFOptions.write_buffer_size': ('1024000', '128000')}])
+
+    cf1_vs_default_diff['CFOptions.write_buffer_size'] = \
+        cf2_vs_default_diff['CFOptions.write_buffer_size']
+    cf2_vs_default_diff['TableOptions.BlockBasedTable.cf2_option'] = (200, 300)
+    assert DatabaseOptions.get_unified_cfs_diffs(cfs_diffs) == (
+        {'CFOptions.write_buffer_size': ('1024000', '128000')},
+        [{CfsOptionsDiff.CF_NAMES_KEY: {"Base": default, "New": cf1}},
+         {CfsOptionsDiff.CF_NAMES_KEY: {"Base": default, "New": cf2},
+          'TableOptions.BlockBasedTable.cf2_option': (200, 300)}])
+
+    cf1_vs_default_diff['TableOptions.BlockBasedTable.cf1_option'] = (True,
+                                                                      False)
+    assert DatabaseOptions.get_unified_cfs_diffs(cfs_diffs) == (
+        {'CFOptions.write_buffer_size': ('1024000', '128000')},
+        [{CfsOptionsDiff.CF_NAMES_KEY: {"Base": default, "New": cf1},
+          'TableOptions.BlockBasedTable.cf1_option': (True, False)},
+         {CfsOptionsDiff.CF_NAMES_KEY: {"Base": default, "New": cf2},
+          'TableOptions.BlockBasedTable.cf2_option': (200, 300)}])

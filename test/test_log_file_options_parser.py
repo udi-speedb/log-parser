@@ -12,9 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.'''
 
-from log_file_options_parser import LogFileOptionsParser
 from log_entry import LogEntry
+from log_file_options_parser import get_table_options_topic_info, \
+    LogFileOptionsParser
 from test.sample_log_info import SampleLogInfo, SampleRolledLogInfo
+
+
+def test_get_table_options_topic_info():
+    assert get_table_options_topic_info(
+        "metadata_cache_options") == ("metadata_cache_options",
+                                      "metadata_cache_")
+    assert get_table_options_topic_info(
+        "block_cache_options") == ("block_cache_options", "block_cache_")
+
+    assert get_table_options_topic_info("block_cache") is None
 
 
 def read_sample_file(InfoClass):

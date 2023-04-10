@@ -6,10 +6,13 @@ Speedb's Log Parser is a tool that may be used to parse and process
 Speedb and RocksDB log files.
 
 The tool extracts useful information from these logs and aids users in 
-gaining insights about their systems with ease. It is expected to be valuable tool
-for novices and experts alike.
+gaining insights about their systems with ease. It is expected to be a 
+valuable tool for novices and experts alike.
 
+Detailed documentation for the log parser tool is available at 
+https://speedb.atlassian.net/l/cp/3mKT4gYH
 
+TODO: - Update this to the GitBook URL when it is available under https://github.com/speedb-io/documentation/tree/main/tools
 
 
 <!-- GETTING STARTED -->
@@ -17,22 +20,28 @@ for novices and experts alike.
 The tool runs on a single log file and generates one or more outputs:
 1. A short summary printed to the console
 2. A detailed summary in a JSON format
-3. The detailed JSON file printer to the console. This may be filtered 
-   using tools such as (e.g., JQ)
-4. A CSV file with the statistics counters (if available)
+3. A detailed summary printed to the console. This is effectively the JSON 
+   file. This output may be filtered by command-line tools such 
+   as JQ (https://stedolan.github.io/jq/).
+4. A CSV file with the statistics counters (if available): `counters.csv`
 5. A CSV(s) file with the statistics histograms counters (if available). 
-   There are 2 such files generated, one aimed at humans (easier to read 
-   for humans), and the other aimed at automated tools.
-6. A CSV file with the compaction statistics
+   There are 2 such files generated:
+   1. `histograms_human_readable.csv`: Aimed at humans (easier to read
+      by humans).
+   2. `histograms_tools.csv`: Aimed at automated tools.
+6. A CSV file with the compaction statistics: `compaction.csv`
 7. A log file of the tool's run (used for debugging purposes)
 
 By default, a short console summary will be displayed. Users may request the 
 tool to also generate the JSON detailed summary, and the detailed console 
 summary.
 
-The outputs are placed in a separate folder (the folder is DELETED if 
-already exists). By default, "output_files" will be the name of that folder 
-but the user may override that.
+The outputs are placed in a sub-folder under a separate parent folder. The 
+user may specify the name of the parent folder(The default name for the 
+parent folder is `output_files`). 
+The naming conventions for the sub-folders is: "log_parser_XXXX", where 
+XXXX are 4 digits. A new sub-folder is created every run, and the number (XXXX) 
+increases by 1. The numbers wrap-around when reaching 9999.
 
 Running the tool without any parameters will allow users to view the 
 possible flags the tool supports:
@@ -48,8 +57,7 @@ And also get detailed help information:
 
 ### Prerequisites
 
-Python version 3 (to run the parser tool) [TBD - Which eact minor Python 3 
-version?]
+Python version 3.8 or greater
 
 ### Installation
 
@@ -69,7 +77,9 @@ version?]
    ```
 
 ### Testing
-The tool comes with a set of pytest unit tests.
+The tool comes with a set of pytest unit tests. The unit tests are run by 
+the pytest unit testing framework (https://docs.pytest.org).
+
 To run the unit tests:
 1. Install pytest (see Installaion section for details)
 2. Go to the test folder
@@ -81,7 +91,7 @@ To run the unit tests:
    ```sh
    pytest
    ```
-   
+All the unit tests should pass.
 
 <!-- USAGE EXAMPLES -->
 ## Usage
@@ -91,14 +101,6 @@ The repo contains a sample file that may be used to run the tool:
    python3 test/input_files/LOG_speedb
    ```
 
-
-<!-- ROADMAP -->
-## Roadmap
-
-TBD
-
-
-See the [open issues](TBD) for a full list of proposed features (and known issues).
 
 
 

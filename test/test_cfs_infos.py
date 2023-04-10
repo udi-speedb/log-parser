@@ -13,10 +13,10 @@
 # limitations under the License.'''
 
 import pytest
-from cfs_infos import CfMetadata, CfsMetadata
-import test.test_utils as test_utils
-import defs_and_utils
 
+import test.testing_utils as test_utils
+import utils
+from cfs_infos import CfMetadata, CfsMetadata
 
 default = "default"
 cf1 = "cf1"
@@ -66,7 +66,7 @@ def test_empty():
     assert cfs.get_cf_id(cf1) is None
     assert cfs.get_cf_info_by_name(cf1) is None
     assert cfs.get_cf_info_by_id(cf1_id) is None
-    assert cfs.get_non_auto_generated_cf_names() == []
+    assert cfs.get_non_auto_generated_cfs_names() == []
     assert cfs.get_auto_generated_cf_names() == []
     assert cfs.get_num_cfs() == 0
 
@@ -88,7 +88,7 @@ def test_add_cf_found_during_options_parsing_cf_name_known():
     assert cfs.get_cf_id(cf1) == cf1_id
     assert cfs.get_cf_info_by_name(cf1) == expected_cf_metadata
     assert cfs.get_cf_info_by_id(cf1_id) == expected_cf_metadata
-    assert cfs.get_non_auto_generated_cf_names() == [cf1]
+    assert cfs.get_non_auto_generated_cfs_names() == [cf1]
     assert cfs.get_auto_generated_cf_names() == []
     assert cfs.get_num_cfs() == 1
     assert not cfs.was_cf_dropped(cf1)
@@ -117,7 +117,7 @@ def test_add_cf_found_during_options_parsing_auto_generated_cf_name():
                    drop_time=None)
     assert cfs.get_cf_id(cf1) is None
     assert cfs.get_cf_info_by_name(unknown_cf_name) == expected_cf_metadata
-    assert cfs.get_non_auto_generated_cf_names() == []
+    assert cfs.get_non_auto_generated_cfs_names() == []
     assert cfs.get_auto_generated_cf_names() == [unknown_cf_name]
     assert cfs.get_num_cfs() == 1
     assert not cfs.was_cf_dropped(cf1)
@@ -153,7 +153,7 @@ def test_handle_cf_name_found_during_parsing():
     assert cfs.get_cf_id(cf2) is None
     assert cfs.get_cf_info_by_name(cf2) == expected_cf_metadata
     assert cfs.get_cf_info_by_id(cf2_id) is None
-    assert cfs.get_non_auto_generated_cf_names() == [cf1, cf2]
+    assert cfs.get_non_auto_generated_cfs_names() == [cf1, cf2]
     assert cfs.get_auto_generated_cf_names() == []
     assert cfs.get_num_cfs() == 2
 
@@ -161,7 +161,7 @@ def test_handle_cf_name_found_during_parsing():
 def test_parse_cf_recovered_entry():
     cfs = CfsMetadata("dummy-path")
 
-    with pytest.raises(defs_and_utils.ParsingError):
+    with pytest.raises(utils.ParsingError):
         cfs.try_parse_as_cf_lifetime_entries([cf1_recovered_entry],
                                              entry_idx=0)
     cfs.add_cf_found_during_cf_options_parsing(cf1, cf_id=None,
@@ -176,7 +176,7 @@ def test_parse_cf_recovered_entry():
 def test_parse_cf_created_entry():
     cfs = CfsMetadata("dummy-path")
 
-    with pytest.raises(defs_and_utils.ParsingError):
+    with pytest.raises(utils.ParsingError):
         cfs.try_parse_as_cf_lifetime_entries([cf1_created_entry],
                                              entry_idx=0)
     cfs.add_cf_found_during_cf_options_parsing(cf1, cf_id=None,
@@ -210,6 +210,6 @@ def test_parse_cf_dropped_entry():
     assert cfs.get_cf_drop_time(cf1) == cf1_drop_time
 
     # Illegal to drop twice
-    with pytest.raises(defs_and_utils.ParsingError):
+    with pytest.raises(utils.ParsingError):
         assert cfs.try_parse_as_cf_lifetime_entries([cf1_dropped_entry],
                                                     entry_idx=0) == (True, 1)

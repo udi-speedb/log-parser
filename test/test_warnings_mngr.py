@@ -12,75 +12,40 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.'''
 
-import defs_and_utils
 from log_entry import LogEntry
-from warnings_mngr import WarningElementInfo, WarningsMngr
-import regexes
+from utils import NO_CF, WarningType
+from warnings_mngr import WarningCategory, WarningElementInfo, WarningsMngr
 
 
-def create_warning_entry(warning_type, code_pos,
-                         warning_element_info: WarningElementInfo):
-    warning_line = warning_element_info.warning_time + " "
+def create_warning_entry(warning_type, cf_name, warning_element_info):
+    assert isinstance(warning_type, WarningType)
+    assert isinstance(warning_element_info, WarningElementInfo)
+
+    warning_line = warning_element_info.time + " "
     warning_line += '7f4a8b5bb700 '
 
     warning_line += f'[{warning_type.name}] '
-    warning_line += f'[{code_pos}] '
+    warning_line += f'[{warning_element_info.code_pos}] '
 
-    if warning_element_info.cf_name != defs_and_utils.NO_COL_FAMILY:
-        warning_line += f'[{warning_element_info.cf_name}] '
+    if cf_name != NO_CF:
+        warning_line += f'[{cf_name}] '
     warning_line += warning_element_info.warning_msg
 
     warning_entry = LogEntry(0, warning_line, True)
     assert warning_entry.is_warn_msg()
     assert warning_entry.get_warning_type() == warning_type
-    assert warning_entry.get_code_pos() == code_pos
+    assert warning_entry.get_code_pos() == warning_element_info.code_pos
 
     return warning_entry
 
 
-def add_warning(warnings_mngr: WarningsMngr, time, code_pos, cf_name,
-                warn_msg, expected_warnings_info, expected_errors_info):
-    num_stalls = warnings_mngr.get_num_stalls()
-    num_stops = warnings_mngr.get_num_stops()
+def add_warning(mngr, warning_type, time, code_pos, cf_name, warn_msg):
+    assert isinstance(warning_type, WarningType)
 
-    warning_element_info = WarningElementInfo(time, cf_name, warn_msg)
-    warn_entry1 = create_warning_entry(defs_and_utils.WarningType.WARN,
-                                       code_pos,
-                                       warning_element_info)
-    assert warnings_mngr.try_adding_entry(warn_entry1)
-
-    if code_pos not in expected_warnings_info:
-        expected_warnings_info[code_pos] = []
-    expected_warnings_info[code_pos].append(warning_element_info)
-    validate_expected_warnings(warnings_mngr, expected_warnings_info,
-                               expected_errors_info)
-
-    if warn_msg.startswith(regexes.STALLS_WARN_MSG_PREFIX):
-
-        num_stalls += 1
-    if warn_msg.startswith(regexes.STOPS_WARN_MSG_PREFIX):
-        num_stops += 1
-    assert num_stalls == warnings_mngr.get_num_stalls()
-    assert num_stops == warnings_mngr.get_num_stops()
-
-    return expected_warnings_info
-
-
-def validate_expected_warnings(warnings_mngr: WarningsMngr,
-                               expected_warnings_info,
-                               expected_errors_info):
-    assert warnings_mngr.get_total_num_warns() == len(expected_warnings_info)
-    assert warnings_mngr.get_total_num_errors() == len(expected_errors_info)
-
-    actual_warn_warnings = warnings_mngr.get_warn_warnings()
-    for warning_type_id, elements_info_list in expected_warnings_info.items():
-        assert warning_type_id in actual_warn_warnings
-        assert elements_info_list == actual_warn_warnings[warning_type_id]
-
-    actual_error_warnings = warnings_mngr.get_error_warnings()
-    for warning_type_id, elements_info_list in expected_errors_info.items():
-        assert warning_type_id in actual_error_warnings
-        assert elements_info_list == actual_error_warnings[warning_type_id]
+    warning_element_info = WarningElementInfo(time, code_pos, warn_msg)
+    warn_entry = create_warning_entry(
+        warning_type, cf_name, warning_element_info)
+    assert mngr.try_adding_entry(warn_entry)
 
 
 def test_non_warnings_entries():
@@ -90,105 +55,103 @@ def test_non_warnings_entries():
     line2 = '''2022/04/17-14:21:50.026087 7f4a8b5bb700 EVENT_LOG_v1
     {"time_micros": 1650205310026076, "job": 9, "event": "flush_started"'''
 
-    cf_names = ["cf1", "cf2"]
-    warnings_mngr = WarningsMngr(cf_names)
+    cfs_names = ["cf1", "cf2"]
+    warnings_mngr = WarningsMngr()
 
     assert LogEntry.is_entry_start(line1)
     entry1 = LogEntry(0, line1, True)
     assert LogEntry.is_entry_start(line2)
     entry2 = LogEntry(0, line2, True)
 
-    assert warnings_mngr.try_adding_entry(entry1) == (False, None)
-    assert warnings_mngr.try_adding_entry(entry2) == (False, None)
+    assert not warnings_mngr.try_adding_entry(entry1)
+    assert not warnings_mngr.try_adding_entry(entry2)
+    warnings_mngr.set_cfs_names_on_parsing_complete(cfs_names)
 
 
-def test_warn_entries():
+def test_warn_entries_empty():
+    mngr = WarningsMngr()
+    mngr.set_cfs_names_on_parsing_complete(["cf1", "cf2"])
+    assert mngr.get_all_warnings() == {}
+
+
+def test_warn_entries_basic():
     cf1 = "cf1"
     cf2 = "cf2"
-    cf_names = [cf1, cf2]
-    warnings_mngr = WarningsMngr(cf_names)
+    cf3 = "cf3"
+    cfs_names = [cf1, cf2, cf3]
 
-    expected_warnings_info = dict()
-    expected_errors_info = dict()
-    validate_expected_warnings(warnings_mngr, expected_warnings_info,
-                               expected_errors_info)
+    time1 = "2022/04/17-14:21:50.026058"
+    time2 = "2022/04/17-14:21:51.026058"
+    time3 = "2022/04/17-14:21:52.026058"
+    time4 = "2022/04/17-14:21:53.026058"
+    time5 = "2022/04/17-14:21:54.026058"
+
+    warn_msg1 = "Warning Message 1"
+    cf_warn_msg1 = f"[{cf1}] {warn_msg1}"
+    warn_msg2 = "Warning Message 2"
+    cf_warn_msg2 = f"[{cf2}] {warn_msg2}"
+    warn_msg3 = "Warning Message 3"
+    cf_warn_msg3 = f"[{cf2}] {warn_msg3}"
+
+    delay_msg = "Stalling writes, L0 files 2, memtables 2"
+    cf_delay_msg = f"[{cf2}] {delay_msg}"
+    stop_msg = "Stopping writes Dummy Text 1"
+    cf_stop_msg = f"[{cf1}] {stop_msg}"
 
     code_pos1 = "/flush_job.cc:333"
     code_pos2 = "/column_family.cc:932"
+    code_pos3 = "/column_family1.cc:999"
+    code_pos4 = "/column_family2.cc:1111"
 
-    expected_warnings_info = add_warning(warnings_mngr,
-                                         "2022/04/17-14:21:50.026058",
-                                         code_pos1, cf1, "Warning Message 1",
-                                         expected_warnings_info,
-                                         expected_errors_info)
+    mngr = WarningsMngr()
+    add_warning(mngr, WarningType.WARN, time1, code_pos1, cf1, warn_msg1)
+    add_warning(mngr, WarningType.ERROR, time2, code_pos1, cf2, warn_msg2)
+    add_warning(mngr, WarningType.WARN, time3, code_pos2, cf2, warn_msg3)
+    add_warning(mngr, WarningType.WARN, time4, code_pos3, cf2, delay_msg)
+    add_warning(mngr, WarningType.WARN, time5, code_pos4, cf1, stop_msg)
+    mngr.set_cfs_names_on_parsing_complete(cfs_names)
 
-    expected_warnings_info = add_warning(warnings_mngr,
-                                         "2022/04/17-14:21:50.026058",
-                                         code_pos1, cf2, "Warning Message 2",
-                                         expected_warnings_info,
-                                         expected_errors_info)
+    expected_cf1_warn_warnings = {
+        WarningCategory.WRITE_STOP:
+            [WarningElementInfo(time5, code_pos4, cf_stop_msg)],
+        WarningCategory.OTHER:
+            [WarningElementInfo(time1, code_pos1, cf_warn_msg1)]
+    }
+    expected_cf2_warn_warnings = {
+        WarningCategory.WRITE_DELAY:
+            [WarningElementInfo(time4, code_pos3, cf_delay_msg)],
+        WarningCategory.OTHER:
+            [WarningElementInfo(time3, code_pos2, cf_warn_msg3)]
+    }
+    expected_cf2_error_warnings = {
+        WarningCategory.OTHER:
+            [WarningElementInfo(time2, code_pos1, cf_warn_msg2)]}
 
-    add_warning(warnings_mngr,
-                "2022/04/17-14:21:50.026058",
-                code_pos2, cf2, "Warning Message 3",
-                expected_warnings_info,
-                expected_errors_info)
+    expected_warn_warnings = {
+            cf1: expected_cf1_warn_warnings,
+            cf2: expected_cf2_warn_warnings
+    }
+    expected_error_warnings = {cf2: expected_cf2_error_warnings}
 
+    all_expected_warnings = {
+        WarningType.WARN: expected_warn_warnings,
+        WarningType.ERROR: expected_error_warnings
+    }
 
-def test_num_stalls_and_stops():
-    cf1 = "cf1"
-    cf2 = "cf2"
-    cf_names = [cf1, cf2]
+    actual_cf1_warn_warnings = mngr.get_cf_warn_warnings(cf1)
+    assert actual_cf1_warn_warnings == expected_cf1_warn_warnings
 
-    warnings_mngr = WarningsMngr(cf_names)
-    assert warnings_mngr.get_num_stalls() == 0
-    assert warnings_mngr.get_num_stops() == 0
+    actual_cf2_warn_warnings = mngr.get_cf_warn_warnings(cf2)
+    assert actual_cf2_warn_warnings == expected_cf2_warn_warnings
 
-    stall_msg1 = regexes.STALLS_WARN_MSG_PREFIX + ", L0 files 2, memtables 2"
-    stall_msg2 = regexes.STALLS_WARN_MSG_PREFIX + ", L0 files 3, memtables 2"
-    stall_msg3 = regexes.STALLS_WARN_MSG_PREFIX + ", L0 files 4, memtables 2"
-    stop_msg1 = regexes.STOPS_WARN_MSG_PREFIX + " Dummy Text 1"
-    stop_msg2 = regexes.STOPS_WARN_MSG_PREFIX + " Dummy Text 2"
+    actual_cf2_error_warnings = mngr.get_cf_error_warnings(cf2)
+    assert actual_cf2_error_warnings == expected_cf2_error_warnings
 
-    expected_warnings_info = dict()
-    expected_errors_info = dict()
-    code_pos1 = "/flush_job.cc:333"
-    code_pos2 = "/column_family.cc:932"
+    assert mngr.get_cf_warn_warnings(cf3) is None
+    assert mngr.get_cf_error_warnings(cf3) is None
 
-    # Add a stall message #1
-    expected_warnings_info = add_warning(warnings_mngr,
-                                         "2022/04/17-14:21:50.026058",
-                                         code_pos1, cf1, stall_msg1,
-                                         expected_warnings_info,
-                                         expected_errors_info)
+    actual_warn_warnings = mngr.get_warn_warnings()
+    assert expected_warn_warnings == actual_warn_warnings
 
-    # Add a stop message #1
-    expected_warnings_info = add_warning(warnings_mngr,
-                                         "2022/04/17-14:21:50.026058",
-                                         code_pos1, cf1, stall_msg2,
-                                         expected_warnings_info,
-                                         expected_errors_info)
-
-    # Add a stall message #1
-    expected_warnings_info = add_warning(warnings_mngr,
-                                         "2022/05/17-14:21:50.026058",
-                                         code_pos2, cf2, stop_msg1,
-                                         expected_warnings_info,
-                                         expected_errors_info)
-
-    # Add a stall message #3
-    expected_warnings_info = add_warning(warnings_mngr,
-                                         "2022/06/17-14:21:50.026058",
-                                         code_pos2, cf2, stall_msg3,
-                                         expected_warnings_info,
-                                         expected_errors_info)
-
-    # Add a stall message #2
-    expected_warnings_info = add_warning(warnings_mngr,
-                                         "2022/05/17-14:21:50.026058",
-                                         code_pos2, cf1, stop_msg2,
-                                         expected_warnings_info,
-                                         expected_errors_info)
-
-    assert warnings_mngr.get_num_stalls() == 3
-    assert warnings_mngr.get_num_stops() == 2
+    all_actual_warnings = mngr.get_all_warnings()
+    assert all_actual_warnings == all_expected_warnings

@@ -14,9 +14,10 @@
 
 import io
 import logging
-import defs_and_utils
-from log_file import ParsedLog
+
 import display_utils
+import utils
+from log_file import ParsedLog
 
 
 def get_title(log_file_path, parsed_log):
@@ -38,7 +39,7 @@ def print_title(f, log_file_path, parsed_log):
 def print_cf_console_printout(f, parsed_log):
     cfs_info_for_display = \
         display_utils.prepare_general_cf_info_for_display(parsed_log)
-    cfs_names = parsed_log.get_cf_names_that_have_options()
+    cfs_names = parsed_log.get_cfs_names_that_have_options()
 
     cfs_display_values = []
     for i, cf_name in enumerate(cfs_names):
@@ -46,8 +47,8 @@ def print_cf_console_printout(f, parsed_log):
         row = [
             cf_name,
             cf_info["CF Size"],
-            cf_info["Avg Key Size"],
-            cf_info["Avg Value Size"],
+            cf_info["Avg. Key Size"],
+            cf_info["Avg. Value Size"],
             cf_info["Compaction Style"],
             cf_info["Compression"],
             cf_info["Filter-Policy"]
@@ -56,8 +57,8 @@ def print_cf_console_printout(f, parsed_log):
 
     table_header = ["Column Family",
                     "Size",
-                    "Avg Key Size",
-                    "Avg Value Size",
+                    "Avg. Key Size",
+                    "Avg. Value Size",
                     "Compaction Style",
                     "Compression",
                     "Filter-Policy"]
@@ -81,7 +82,7 @@ def get_console_output(log_file_path, parsed_log, output_type):
 
     f = io.StringIO()
 
-    if output_type == defs_and_utils.ConsoleOutputType.SHORT:
+    if output_type == utils.ConsoleOutputType.SHORT:
         print_title(f, log_file_path, parsed_log)
         print_general_info(f, parsed_log)
 

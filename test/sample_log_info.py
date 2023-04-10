@@ -13,27 +13,40 @@
 # limitations under the License.'''
 
 from datetime import timedelta
-import defs_and_utils
+
+import utils
 
 
 class SampleLogInfo:
-    FILE_PATH = "input_files/LOG_sample.txt"
+    FILE_PATH = "input_files/LOG_sample"
     START_TIME = "2022/04/17-14:13:10.723796"
     END_TIME = "2022/04/17-14:14:32.645120"
     PRODUCT_NAME = "SpeeDB"
     GIT_HASH = "UNKNOWN:0a396684d6c08f6fe4a37572c0429d91176c51d1"
     VERSION = "6.22.1"
     NUM_ENTRIES = 73
-    CF_NAMES = ['default', '_sample/CF_1', '_sample/CF-2', '']
+    CF_DEFAULT = 'default'
+    CF_NAMES = [CF_DEFAULT, '_sample/CF_1', '_sample/CF-2', '']
     DB_WIDE_OPTIONS_START_ENTRY_IDX = 7
     SUPPORT_INFO_START_ENTRY_IDX = 15
 
+    CF_DEFAULT_LEVEL_SIZES = {
+        0: utils.get_num_bytes_from_human_readable_components("149.99", "MB"),
+        1: utils.get_num_bytes_from_human_readable_components("271.79", "MB"),
+        2: utils.get_num_bytes_from_human_readable_components("2.73", "GB"),
+        3: utils.get_num_bytes_from_human_readable_components("24.96", "GB"),
+        4: utils.get_num_bytes_from_human_readable_components("54.33", "GB"),
+    }
+
     CF_SIZE_BYTES = \
-        {'default': defs_and_utils.get_value_by_unit("82.43", "GB"),
-         '_sample/CF_1': 0,
-         '_sample/CF-2': 0,
-         '': 0,
-         }
+        {
+            'default':
+                utils.get_num_bytes_from_human_readable_components(
+                    "82.43", "GB"),
+            '_sample/CF_1': 0,
+            '_sample/CF-2': 0,
+            '': 0,
+        }
 
     DB_SIZE_BYTES = sum([size for size in CF_SIZE_BYTES.values()])
 

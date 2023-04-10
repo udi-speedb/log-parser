@@ -12,10 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.'''
 
+import copy
+import re
 from enum import Enum, auto
-import defs_and_utils
 
-DB_WIDE_CF_NAME = defs_and_utils.NO_COL_FAMILY
+import regexes
+import utils
+
+DB_WIDE_CF_NAME = utils.NO_CF
+
+SANITIZED_NO_VALUE = "Missing"
+RAW_NULL_PTR = "Uninitialised"
+SANITIZED_NULL_PTR = f"Pointer ({RAW_NULL_PTR})"
+SANITIZED_FALSE = str(False)
+SANITIZED_TRUE = str(False)
 
 
 class SectionType(str, Enum):
@@ -41,7 +51,7 @@ class SectionType(str, Enum):
             except Exception: # noqa
                 continue
 
-        raise defs_and_utils.ParsingError(
+        raise utils.ParsingError(
             f"Invalid full option name ({full_option_name}")
 
 
@@ -49,7 +59,7 @@ def validate_section(section_type, expected_type=None):
     SectionType.extract_section_type(f"{section_type}.dummy")
     if expected_type is not None:
         if section_type != expected_type:
-            raise defs_and_utils.ParsingError(
+            raise utils.ParsingError(
                 f"Not DB Wide section name ({section_type}")
 
 
@@ -99,37 +109,51 @@ def extract_cf_table_option_name(full_option_name):
     return option_name
 
 
-SANITIZED_NO_VALUE = "No Value"
-SANITIZED_FALSE = str(False)
-SANITIZED_TRUE = str(False)
+def is_sanitized_pointer_value(value):
+    return re.findall(regexes.SANITIZED_POINTER, value.strip())
+
+
+def sanitized_to_raw_ptr_value(sanitized_value):
+    if sanitized_value.strip() == SANITIZED_NULL_PTR:
+        return RAW_NULL_PTR
+    assert is_sanitized_pointer_value(sanitized_value)
+
+    match = re.fullmatch(regexes.SANITIZED_POINTER, sanitized_value.strip())
+    assert match
+    return match.group('ptr')
 
 
 class SanitizedValueType(Enum):
     NO_VALUE = auto()
     BOOL = auto()
+    NULL_PTR = auto()
+    POINTER = auto()
     OTHER = auto()
 
     @staticmethod
     def get_type_from_str(value):
         if value == SANITIZED_NO_VALUE:
             return SanitizedValueType.NO_VALUE
+        elif value == SANITIZED_NULL_PTR:
+            return SanitizedValueType.NULL_PTR
         elif value == SANITIZED_FALSE or value == SANITIZED_TRUE:
             return SanitizedValueType.BOOL
+        elif is_sanitized_pointer_value(value):
+            return SanitizedValueType.POINTER
         else:
             return SanitizedValueType.OTHER
 
 
-def check_and_sanitize_if_no_value(value):
-    if value is None:
-        return True, "No Value"
-    elif isinstance(value, str):
+def check_and_sanitize_if_null_ptr(value):
+    if isinstance(value, str):
         temp_value = value.lower()
         if temp_value == "none" or \
                 temp_value == "(nil)" or \
                 temp_value == "nil" or \
                 temp_value == "nullptr" or \
-                temp_value == "null":
-            return True, "No Value"
+                temp_value == "null" or \
+                temp_value == "0x0":
+            return True, SANITIZED_NULL_PTR
 
     return False, value
 
@@ -157,15 +181,38 @@ def check_and_sanitize_if_bool_value(value, include_int):
     return False, value
 
 
+def check_and_sanitize_if_pointer_value(value):
+    is_null, sanitized_value = check_and_sanitize_if_null_ptr(value)
+    if is_null:
+        return False, value
+    if not isinstance(value, str):
+        return False, value
+
+    pointer_match = re.findall(regexes.POINTER, value.strip())
+    if not pointer_match:
+        return False, value
+    assert len(pointer_match) == 1
+
+    return True, f"Pointer ({pointer_match[0]})"
+
+
 def get_sanitized_value_with_type(value):
-    is_no_value, sanitized_value = check_and_sanitize_if_no_value(value)
-    if is_no_value:
-        return sanitized_value, SanitizedValueType.NO_VALUE
+    if value is None:
+        return SANITIZED_NO_VALUE, SanitizedValueType.NO_VALUE
 
     is_bool_value, sanitized_value =\
         check_and_sanitize_if_bool_value(value, include_int=False)
     if is_bool_value:
         return sanitized_value, SanitizedValueType.BOOL
+
+    is_null_ptr, sanitized_value = check_and_sanitize_if_null_ptr(value)
+    if is_null_ptr:
+        return sanitized_value, SanitizedValueType.NULL_PTR
+
+    is_pointer_value, sanitized_value =\
+        check_and_sanitize_if_pointer_value(value)
+    if is_pointer_value:
+        return sanitized_value, SanitizedValueType.POINTER
 
     return value, SanitizedValueType.OTHER
 
@@ -175,39 +222,44 @@ def get_sanitized_value(value):
     return sanitized_value
 
 
+def get_sanitized_options_diff(base_value, new_value, expect_diff):
+    sanitized_base_value, base_type = \
+        get_sanitized_value_with_type(base_value)
+    sanitized_new_value, new_type = \
+        get_sanitized_value_with_type(new_value)
+
+    # We expect a diff => It's a bug if both are no-value (=> equal)
+    if expect_diff:
+        assert base_type != SanitizedValueType.NO_VALUE or \
+           new_type != SanitizedValueType.NO_VALUE
+        # Same - 2 pointers are considered equal => bug
+        assert base_type != SanitizedValueType.POINTER or \
+               new_type != SanitizedValueType.POINTER
+
+    if base_type == SanitizedValueType.BOOL or \
+            new_type == SanitizedValueType.BOOL:
+        _, sanitized_base_value = check_and_sanitize_if_bool_value(
+            sanitized_base_value, include_int=True)
+        _, sanitized_new_value = check_and_sanitize_if_bool_value(
+            sanitized_new_value, include_int=True)
+
+    if base_type == new_type and base_type == SanitizedValueType.POINTER:
+        are_diff = False
+    else:
+        are_diff = sanitized_base_value != sanitized_new_value
+
+    if expect_diff:
+        assert are_diff
+        return sanitized_base_value, sanitized_new_value
+    else:
+        return are_diff, sanitized_base_value, sanitized_new_value
+
+
 def are_non_sanitized_values_different(base_value, new_value):
-    is_base_no_value, sanitized_base_value = \
-        check_and_sanitize_if_no_value(base_value)
-    is_new_no_value, sanitized_new_value = \
-        check_and_sanitize_if_no_value(new_value)
-    if is_base_no_value and is_new_no_value:
-        return sanitized_base_value != sanitized_new_value
+    are_diff, _, _ = get_sanitized_options_diff(base_value, new_value,
+                                                expect_diff=False)
 
-    is_base_bool, sanitized_base_value =\
-        check_and_sanitize_if_bool_value(base_value, include_int=True)
-    is_new_bool, sanitized_new_value =\
-        check_and_sanitize_if_bool_value(new_value, include_int=True)
-
-    if is_base_bool and is_new_bool:
-        return sanitized_base_value != sanitized_new_value
-
-    return get_sanitized_value(base_value) != get_sanitized_value(new_value)
-
-
-def get_sanitized_options_diff(base_value, new_value):
-    sanitized_base_value, base_type = get_sanitized_value_with_type(base_value)
-    sanitized_new_value, new_type = get_sanitized_value_with_type(new_value)
-
-    if base_type != SanitizedValueType.NO_VALUE and \
-            new_type != SanitizedValueType.NO_VALUE:
-        if base_type == SanitizedValueType.BOOL or \
-                new_type == SanitizedValueType.BOOL:
-            _, sanitized_base_value = check_and_sanitize_if_bool_value(
-                sanitized_base_value, include_int=True)
-            _, sanitized_new_value = check_and_sanitize_if_bool_value(
-                sanitized_new_value, include_int=True)
-
-    return sanitized_base_value, sanitized_new_value
+    return are_diff
 
 
 class FullNamesOptionsDict:
@@ -236,13 +288,6 @@ class FullNamesOptionsDict:
 
         self.options_dict[full_option_name].update({
             cf_name: get_sanitized_value(option_value)})
-
-    def set_misc_option(self, option_name, option_value):
-        if option_name not in self.options_dict:
-            self.options_dict[option_name] = {}
-
-        self.options_dict[option_name].update({
-            DB_WIDE_CF_NAME: get_sanitized_value(option_value)})
 
     def get_option_by_full_name(self, full_option_name):
         if full_option_name not in self.options_dict:
@@ -304,20 +349,23 @@ class OptionsDiff:
         self.add_option_if_necessary(full_option_name)
         self.diff_dict[full_option_name][cf_name] =\
             get_sanitized_options_diff(
-                self.baseline_options[full_option_name][cf_name], None)
+                self.baseline_options[full_option_name][cf_name], None,
+                expect_diff=True)
 
     def diff_in_new(self, cf_name, full_option_name):
         self.add_option_if_necessary(full_option_name)
         self.diff_dict[full_option_name][cf_name] =\
             get_sanitized_options_diff(
-                None, self.new_options[full_option_name][cf_name])
+                None, self.new_options[full_option_name][cf_name],
+                expect_diff=True)
 
     def diff_between(self, cf_name, full_option_name):
         self.add_option_if_necessary(full_option_name)
         self.diff_dict[full_option_name][cf_name] =\
             get_sanitized_options_diff(
                 self.baseline_options[full_option_name][cf_name],
-                self.new_options[full_option_name][cf_name])
+                self.new_options[full_option_name][cf_name],
+                expect_diff=True)
 
     def add_option_if_necessary(self, full_option_name):
         if full_option_name not in self.diff_dict:
@@ -370,21 +418,23 @@ class CfsOptionsDiff:
         self.diff_dict[full_option_name] = \
             get_sanitized_options_diff(
                 self.baseline_options[full_option_name][self.baseline_cf_name],
-                None)
+                None, expect_diff=True)
 
     def diff_in_new(self, full_option_name):
         self.add_option_if_necessary(full_option_name)
         self.diff_dict[full_option_name] = \
             get_sanitized_options_diff(
                 None,
-                self.new_options[full_option_name][self.new_cf_name])
+                self.new_options[full_option_name][self.new_cf_name],
+                expect_diff=True)
 
     def diff_between(self, full_option_name):
         self.add_option_if_necessary(full_option_name)
         self.diff_dict[full_option_name] = \
             get_sanitized_options_diff(
                 self.baseline_options[full_option_name][self.baseline_cf_name],
-                self.new_options[full_option_name][self.new_cf_name])
+                self.new_options[full_option_name][self.new_cf_name],
+                expect_diff=True)
 
     def add_option_if_necessary(self, full_option_name):
         if full_option_name not in self.diff_dict:
@@ -405,14 +455,7 @@ class CfsOptionsDiff:
 
 
 class DatabaseOptions:
-    @staticmethod
-    def is_misc_option(option_name):
-        # these are miscellaneous options that are not yet supported by the
-        # Rocksdb options file, hence they are not prefixed with any section
-        # name
-        return '.' not in option_name
-
-    def __init__(self, section_based_options_dict=None, misc_options=None):
+    def __init__(self, section_based_options_dict=None):
         # The options are stored in the following data structure:
         # {DBOptions: {DB_WIDE: {<option-name>: <option-value>, ...}},
         # {CFOptions: {<cf-name>: {<option-name>: <option-value>, ...}},
@@ -426,15 +469,8 @@ class DatabaseOptions:
             # TODO - Verify the format of the options_dict
             self.options_dict = section_based_options_dict
 
-        self.misc_options = None
         self.column_families = None
         self.setup_column_families()
-
-        # Setup the miscellaneous options expected to be List[str], where each
-        # element in the List has the format "<option_name>=<option_value>"
-        # These options are the ones that are not yet supported by the Rocksdb
-        # OPTIONS file, so they are provided separately
-        self.setup_misc_options(misc_options)
 
     def __str__(self):
         return "DatabaseOptions"
@@ -443,7 +479,7 @@ class DatabaseOptions:
         # The input dictionary is expected to be like this:
         # {<option name>: <option_value>}
         if self.are_db_wide_options_set():
-            raise defs_and_utils.ParsingAssertion(
+            raise utils.ParsingAssertion(
                 "DB Wide Options Already Set")
 
         self.options_dict[SectionType.DB_WIDE] = {
@@ -465,12 +501,12 @@ class DatabaseOptions:
 
     def validate_no_section(self, section_type):
         if section_type in self.options_dict:
-            raise defs_and_utils.ParsingAssertion(
+            raise utils.ParsingAssertion(
                 f"{section_type} Already Set")
 
     def validate_no_cf_name_in_section(self, section_type, cf_name):
         if cf_name in self.options_dict[section_type]:
-            raise defs_and_utils.ParsingAssertion(
+            raise utils.ParsingAssertion(
                 f"{section_type} Already Set for this CF ({cf_name})")
 
     def set_cf_options(self, cf_name, cf_non_table_options, table_options):
@@ -488,14 +524,6 @@ class DatabaseOptions:
 
         self.setup_column_families()
 
-    def setup_misc_options(self, misc_options):
-        self.misc_options = {}
-        if misc_options:
-            for option_pair_str in misc_options:
-                option_name = option_pair_str.split('=')[0].strip()
-                option_value = option_pair_str.split('=')[1].strip()
-                self.misc_options[option_name] = option_value
-
     def setup_column_families(self):
         self.column_families = []
 
@@ -509,11 +537,6 @@ class DatabaseOptions:
 
     def are_db_wide_options_set(self):
         return SectionType.DB_WIDE in self.options_dict
-
-    def get_misc_options(self):
-        # these are options that are not yet supported by the Rocksdb OPTIONS
-        # file, hence they are provided and stored separately
-        return self.misc_options
 
     def get_cfs_names(self):
         cf_names_no_db_wide = self.column_families
@@ -543,7 +566,6 @@ class DatabaseOptions:
                                                             option_name)
                     full_options_names.append(full_option_name)
 
-        full_options_names.extend(list(self.misc_options.keys()))
         return self.get_options(full_options_names)
 
     def get_db_wide_options(self):
@@ -556,8 +578,6 @@ class DatabaseOptions:
                 full_option_name = get_full_option_name(section_type,
                                                         option_name)
                 full_options_names.append(full_option_name)
-
-        full_options_names.extend(list(self.misc_options.keys()))
 
         return self.get_options(full_options_names, DB_WIDE_CF_NAME)
 
@@ -591,9 +611,77 @@ class DatabaseOptions:
                         get_full_option_name(section_type, option_name)
                     full_options_names.append(full_option_name)
 
-        full_options_names.extend(list(self.misc_options.keys()))
-
         return self.get_options(full_options_names, cf_name)
+
+    @staticmethod
+    def get_unified_cfs_options(cfs_options):
+        # dictionaries that will contain the results
+        common_cfs_options = {}
+        unique_cfs_options = {}
+
+        if not cfs_options:
+            return common_cfs_options, unique_cfs_options
+
+        cfs_names = [cf_name for cf_name in cfs_options.keys()]
+
+        # First assume no common options, later remove common
+        # Remove cf-name from values to allow comparison
+        for cf_name in cfs_names:
+            unique_cfs_options[cf_name] = {}
+            for option_name, option_value_with_cf_name in \
+                    cfs_options[cf_name].options_dict.items():
+                unique_cfs_options[cf_name][option_name] = \
+                    option_value_with_cf_name[cf_name]
+
+        # Check all options
+        first_cf_name = cfs_names[0]
+        for option_name in list(unique_cfs_options[first_cf_name].keys()):
+            try:
+                options_values =\
+                    [unique_cfs_options[cf_name][option_name] for
+                     cf_name in unique_cfs_options.keys()]
+                different_options_values = set(options_values)
+            except KeyError:
+                # At least one cf doesn't have this option => not common
+                continue
+
+            if len(different_options_values) != 1:
+                # At least one cf has a different value for this options =>
+                # not common
+                continue
+
+            # The option is common to all cf-s => place in common
+            # dict, and remove from all unique dicts
+            common_cfs_options[option_name] = options_values[0]
+            for cf_name in cfs_names:
+                del(unique_cfs_options[cf_name][option_name])
+
+        return common_cfs_options, unique_cfs_options
+
+    @staticmethod
+    def prepare_flat_full_names_cf_options_for_display(
+            cf_options, option_value_prepare_func):
+        if option_value_prepare_func is None:
+            def option_value_prepare_func(value):
+                return value
+
+        options_for_display = {}
+        table_options_for_display = {}
+
+        for full_option_name, option_value in cf_options.items():
+            section_type, option_name = \
+                parse_full_option_name(full_option_name)
+
+            if section_type == SectionType.CF:
+                options_for_display[option_name] = \
+                    option_value_prepare_func(option_value)
+
+            else:
+                assert section_type == SectionType.TABLE_OPTIONS
+                table_options_for_display[option_name] = \
+                    option_value_prepare_func(option_value)
+
+        return options_for_display, table_options_for_display
 
     def get_cf_options_for_display(self, cf_name):
         options_for_display = {}
@@ -646,6 +734,10 @@ class DatabaseOptions:
         else:
             return option_value_dict[full_option_name][cf_name]
 
+    def get_cf_table_raw_ptr_str(self, cf_name, options_name):
+        sanitized_ptr = self.get_cf_table_option(cf_name, options_name)
+        return sanitized_to_raw_ptr_value(sanitized_ptr)
+
     def set_cf_table_option(self, cf_name, option_name, option_value,
                             allow_new_option=False):
         if not allow_new_option:
@@ -665,37 +757,31 @@ class DatabaseOptions:
         # Returns a FullNamesOptionsDict for the requested options
         assert isinstance(requested_full_options_names, list) or isinstance(
             requested_full_options_names, set),\
-            f"Illegat requested_full_options_names type " \
+            f"Illegal requested_full_options_names type " \
             f"({type(requested_full_options_names)}"
 
         options = FullNamesOptionsDict()
 
         for full_option_name in requested_full_options_names:
-            if DatabaseOptions.is_misc_option(full_option_name):
-                if full_option_name not in self.misc_options:
-                    continue
-                options.set_misc_option(full_option_name,
-                                        self.misc_options[full_option_name])
+            section_type, option_name = \
+                parse_full_option_name(full_option_name)
+            if section_type not in self.options_dict:
+                continue
+            if requested_cf_name is None:
+                cf_names = self.options_dict[section_type].keys()
             else:
-                section_type, option_name = \
-                    parse_full_option_name(full_option_name)
-                if section_type not in self.options_dict:
+                cf_names = [requested_cf_name]
+
+            for cf_name in cf_names:
+                if cf_name not in self.options_dict[section_type]:
                     continue
-                if requested_cf_name is None:
-                    cf_names = self.options_dict[section_type].keys()
-                else:
-                    cf_names = [requested_cf_name]
+                if option_name in self.options_dict[section_type][cf_name]:
+                    option_value = \
+                        self.options_dict[section_type][cf_name][
+                            option_name]
 
-                for cf_name in cf_names:
-                    if cf_name not in self.options_dict[section_type]:
-                        continue
-                    if option_name in self.options_dict[section_type][cf_name]:
-                        option_value = \
-                            self.options_dict[section_type][cf_name][
-                                option_name]
-
-                        options.set_option(section_type, cf_name, option_name,
-                                           option_value)
+                    options.set_option(section_type, cf_name, option_name,
+                                       option_value)
         return options
 
     @staticmethod
@@ -810,3 +896,44 @@ class DatabaseOptions:
             DB_WIDE_CF_NAME,
             opt_new,
             DB_WIDE_CF_NAME)
+
+    @staticmethod
+    def get_unified_cfs_diffs(cfs_diffs):
+        # Input [CfsOptionsDiff-1, CfsOptionsDiff-2...]
+
+        # dictionaries that will contain the results
+        common_cfs_diffs = {}
+        unique_cfs_diffs = {}
+
+        if not cfs_diffs:
+            return common_cfs_diffs, unique_cfs_diffs
+
+        # First assume no common options, later remove common
+        # unique_cfs_diffs = copy.deepcopy(cfs_diffs)
+        unique_cfs_diffs = copy.deepcopy(cfs_diffs)
+
+        # Check all options diffs
+        for option_name in list(unique_cfs_diffs[0].keys()):
+            try:
+                if option_name == CfsOptionsDiff.CF_NAMES_KEY:
+                    continue
+                option_diffs =\
+                    [unique_cfs_diffs[cf_idx][option_name] for
+                     cf_idx in range(len(unique_cfs_diffs))]
+                different_options_diffs = set(option_diffs)
+            except KeyError:
+                # At least one cf doesn't have this option => not common
+                continue
+
+            if len(different_options_diffs) != 1:
+                # At least one cf has a different diff for this option =>
+                # not common
+                continue
+
+            # The option is common to all cf-s => place in common
+            # dict, and remove from all unique dicts
+            common_cfs_diffs[option_name] = option_diffs[0]
+            for cf_diff in unique_cfs_diffs:
+                del(cf_diff[option_name])
+
+        return common_cfs_diffs, unique_cfs_diffs

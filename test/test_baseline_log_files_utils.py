@@ -12,95 +12,95 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.'''
 
-import baseline_log_files_utils
-import defs_and_utils
+import baseline_log_files_utils as baseline_utils
+import utils
+from database_options import SANITIZED_NO_VALUE
 
-
-v = defs_and_utils.Version
-baseline_logs_folder_path = "../" + defs_and_utils.BASELINE_LOGS_FOLDER
+Ver = baseline_utils.Version
+baseline_logs_folder_path = "../" + utils.BASELINE_LOGS_FOLDER
 
 
 def test_version():
-    assert str(v("1.2.3")) == "1.2.3"
-    assert str(v("1.2")) == "1.2"
-    assert str(v("10.20.30")) == "10.20.30"
-    assert str(v("10.20")) == "10.20"
+    assert str(Ver("1.2.3")) == "1.2.3"
+    assert str(Ver("1.2")) == "1.2"
+    assert str(Ver("10.20.30")) == "10.20.30"
+    assert str(Ver("10.20")) == "10.20"
 
-    v1 = v("1.2.3")
+    v1 = Ver("1.2.3")
     assert v1.major == 1
     assert v1.minor == 2
     assert v1.patch == 3
 
-    v2 = v("4.5")
+    v2 = Ver("4.5")
     assert v2.major == 4
     assert v2.minor == 5
     assert v2.patch is None
 
-    assert v("1.2.3") < v("2.1.1")
-    assert v("2.1.1") > v("1.2.3")
-    assert v("2.2.3") < v("2.3.1")
-    assert v("2.2.1") < v("2.2.2")
-    assert not v("2.2") < v("2.2")
-    assert v("2.2") < v("2.2.0")
-    assert v("2.2") < v("2.3")
-    assert v("2.2") < v("2.2.2")
-    assert v("2.2.1") > v("2.2")
+    assert Ver("1.2.3") < Ver("2.1.1")
+    assert Ver("2.1.1") > Ver("1.2.3")
+    assert Ver("2.2.3") < Ver("2.3.1")
+    assert Ver("2.2.1") < Ver("2.2.2")
+    assert not Ver("2.2") < Ver("2.2")
+    assert Ver("2.2") < Ver("2.2.0")
+    assert Ver("2.2") < Ver("2.3")
+    assert Ver("2.2") < Ver("2.2.2")
+    assert Ver("2.2.1") > Ver("2.2")
 
-    assert v("2.2.3") == v("2.2.3")
-    assert v("2.2") == v("2.2")
-    assert v("2.2.3") != v("2.2")
+    assert Ver("2.2.3") == Ver("2.2.3")
+    assert Ver("2.2") == Ver("2.2")
+    assert Ver("2.2.3") != Ver("2.2")
 
 
 def test_find_closest_version():
     # prepare an unsorted list on purpose
-    baseline_versions = [v("1.2"),
-                         v("1.2.0"),
-                         v("1.2.1"),
-                         v("2.1"),
-                         v("2.1.0"),
-                         v("3.0"),
-                         v("3.0.0")]
+    baseline_versions = [Ver("1.2"),
+                         Ver("1.2.0"),
+                         Ver("1.2.1"),
+                         Ver("2.1"),
+                         Ver("2.1.0"),
+                         Ver("3.0"),
+                         Ver("3.0.0")]
 
-    find = baseline_log_files_utils.find_closest_version_idx
+    find = baseline_utils.find_closest_version_idx
 
-    assert find(baseline_versions, v("1.1")) is None
-    assert find(baseline_versions, v("1.1.9")) is None
-    assert find(baseline_versions, v("1.2")) == 0  # v("1.2")
-    assert find(baseline_versions, v("1.2.0")) == 1  # v("1.2.0")
-    assert find(baseline_versions, v("1.2.2")) == 2  # v("1.2.1")
-    assert find(baseline_versions, v("2.0.0")) == 2  # v("1.2.1")
-    assert find(baseline_versions, v("2.1")) == 3  # v("2.1")
-    assert find(baseline_versions, v("2.1.0")) == 4  # v("2.1.0")
-    assert find(baseline_versions, v("2.1.1")) == 4  # v("2.1.0")
-    assert find(baseline_versions, v("3.0")) == 5  # v("3.0")
-    assert find(baseline_versions, v("3.0.0")) == 6  # v("3.0.0")
-    assert find(baseline_versions, v("3.0.1")) == 6  # v("3.0.0")
-    assert find(baseline_versions, v("3.1")) == 6  # v("3.0.0")
-    assert find(baseline_versions, v("99.99")) == 6  # v("3.0.0")
-    assert find(baseline_versions, v("99.99.99")) == 6  # v("3.0.0")
+    assert find(baseline_versions, Ver("1.1")) is None
+    assert find(baseline_versions, Ver("1.1.9")) is None
+    assert find(baseline_versions, Ver("1.2")) == 0  # Ver("1.2")
+    assert find(baseline_versions, Ver("1.2.0")) == 1  # Ver("1.2.0")
+    assert find(baseline_versions, Ver("1.2.2")) == 2  # Ver("1.2.1")
+    assert find(baseline_versions, Ver("2.0.0")) == 2  # Ver("1.2.1")
+    assert find(baseline_versions, Ver("2.1")) == 3  # Ver("2.1")
+    assert find(baseline_versions, Ver("2.1.0")) == 4  # Ver("2.1.0")
+    assert find(baseline_versions, Ver("2.1.1")) == 4  # Ver("2.1.0")
+    assert find(baseline_versions, Ver("3.0")) == 5  # Ver("3.0")
+    assert find(baseline_versions, Ver("3.0.0")) == 6  # Ver("3.0.0")
+    assert find(baseline_versions, Ver("3.0.1")) == 6  # Ver("3.0.0")
+    assert find(baseline_versions, Ver("3.1")) == 6  # Ver("3.0.0")
+    assert find(baseline_versions, Ver("99.99")) == 6  # Ver("3.0.0")
+    assert find(baseline_versions, Ver("99.99.99")) == 6  # Ver("3.0.0")
 
 
 def test_find_closest_baseline_log_file():
-    find = baseline_log_files_utils.find_closest_baseline_log_file_name
+    find = baseline_utils.find_closest_baseline_log_file_name
 
     versions_to_test_info = [
-        ("1.0.0", defs_and_utils.ProductName.SPEEDB, None, None),
-        ("2.2.1", defs_and_utils.ProductName.SPEEDB, "LOG-speedb-2.2.1",
+        ("1.0.0", utils.ProductName.SPEEDB, None, None),
+        ("2.2.1", utils.ProductName.SPEEDB, "LOG-speedb-2.2.1",
          "2.2.1"),
-        ("2.2.2", defs_and_utils.ProductName.SPEEDB, "LOG-speedb-2.2.1",
+        ("2.2.2", utils.ProductName.SPEEDB, "LOG-speedb-2.2.1",
          "2.2.1"),
-        ("32.0.1", defs_and_utils.ProductName.SPEEDB, "LOG-speedb-2.3.0",
+        ("32.0.1", utils.ProductName.SPEEDB, "LOG-speedb-2.3.0",
          "2.3.0"),
-        ("6.0.0", defs_and_utils.ProductName.ROCKSDB, None, None),
-        ("6.26.0", defs_and_utils.ProductName.ROCKSDB,
+        ("6.0.0", utils.ProductName.ROCKSDB, None, None),
+        ("6.26.0", utils.ProductName.ROCKSDB,
          "LOG-rocksdb-6.26.0", "6.26.0"),
-        ("6.27.0", defs_and_utils.ProductName.ROCKSDB,
+        ("6.27.0", utils.ProductName.ROCKSDB,
          "LOG-rocksdb-6.26.0", "6.26.0"),
-        ("7.10.11", defs_and_utils.ProductName.ROCKSDB,
+        ("7.10.11", utils.ProductName.ROCKSDB,
          "LOG-rocksdb-7.7.3", "7.7.3"),
-        ("8.0.0", defs_and_utils.ProductName.ROCKSDB,
+        ("8.0.0", utils.ProductName.ROCKSDB,
          "LOG-rocksdb-8.0.0", "8.0.0"),
-        ("9.0.0", defs_and_utils.ProductName.ROCKSDB,
+        ("9.0.0", utils.ProductName.ROCKSDB,
          "LOG-rocksdb-8.0.0", "8.0.0")
     ]
 
@@ -108,46 +108,46 @@ def test_find_closest_baseline_log_file():
         closest_baseline_info = \
             find(baseline_logs_folder_path,
                  version_info[1],
-                 v(version_info[0]))
+                 Ver(version_info[0]))
         if version_info[2] is None:
             assert closest_baseline_info is None
         else:
             assert closest_baseline_info is not None
             closest_file_name, closest_version = closest_baseline_info
             assert closest_file_name == version_info[2]
-            assert closest_version == defs_and_utils.Version(version_info[3])
+            assert closest_version == Ver(version_info[3])
 
 
-def test_find_oeEptions_diff():
+def test_find_options_diff():
     database_options_rocksdb_7_7_3, _ =\
-        baseline_log_files_utils.get_baseline_database_options(
+        baseline_utils.get_baseline_database_options(
             baseline_logs_folder_path,
-            defs_and_utils.ProductName.ROCKSDB,
+            utils.ProductName.ROCKSDB,
             version_str="7.7.3")
 
     options_diff_rocksdb_7_7_3_vs_itself, closest_version =\
-        baseline_log_files_utils.find_options_diff_relative_to_baseline(
+        baseline_utils.find_options_diff_relative_to_baseline(
             baseline_logs_folder_path,
-            defs_and_utils.ProductName.ROCKSDB,
-            v("7.7.3"),
+            utils.ProductName.ROCKSDB,
+            Ver("7.7.3"),
             database_options_rocksdb_7_7_3)
     assert options_diff_rocksdb_7_7_3_vs_itself is None
-    assert closest_version == defs_and_utils.Version("7.7.3")
+    assert closest_version == Ver("7.7.3")
 
     database_options_speedb_2_1_0, _ =\
-        baseline_log_files_utils.get_baseline_database_options(
+        baseline_utils.get_baseline_database_options(
             baseline_logs_folder_path,
-            defs_and_utils.ProductName.SPEEDB,
+            utils.ProductName.SPEEDB,
             version_str="2.1.0")
 
     options_diff_speedb_2_1_0_vs_itself, closest_version =\
-        baseline_log_files_utils.find_options_diff_relative_to_baseline(
+        baseline_utils.find_options_diff_relative_to_baseline(
             baseline_logs_folder_path,
-            defs_and_utils.ProductName.SPEEDB,
-            v("2.1.0"),
+            utils.ProductName.SPEEDB,
+            Ver("2.1.0"),
             database_options_speedb_2_1_0)
     assert options_diff_speedb_2_1_0_vs_itself is None
-    assert closest_version == defs_and_utils.Version("2.1.0")
+    assert closest_version == Ver("2.1.0")
 
     expected_diff = {}
     updated_database_options_2_1_0 = database_options_speedb_2_1_0
@@ -158,14 +158,14 @@ def test_find_oeEptions_diff():
     updated_database_options_2_1_0.set_db_wide_option('max_open_files',
                                                       new_max_open_files_value)
     expected_diff['DBOptions.max_open_files'] = \
-        {defs_and_utils.NO_COL_FAMILY: (curr_max_open_files_value,
-                                        new_max_open_files_value)}
+        {utils.NO_CF: (curr_max_open_files_value,
+                       new_max_open_files_value)}
 
     updated_database_options_2_1_0.set_db_wide_option("NEW_DB_WIDE_OPTION1",
                                                       "NEW_DB_WIDE_VALUE1",
                                                       True)
     expected_diff['DBOptions.NEW_DB_WIDE_OPTION1'] = \
-        {defs_and_utils.NO_COL_FAMILY: ("No Value", "NEW_DB_WIDE_VALUE1")}
+        {utils.NO_CF: (SANITIZED_NO_VALUE, "NEW_DB_WIDE_VALUE1")}
 
     cf_name = "default"
 
@@ -182,7 +182,7 @@ def test_find_oeEptions_diff():
     updated_database_options_2_1_0.set_cf_option(cf_name, "NEW_CF_OPTION1",
                                                  "NEW_CF_VALUE1", "True")
     expected_diff['CFOptions.NEW_CF_OPTION1'] =\
-        {'default': ("No Value", "NEW_CF_VALUE1")}
+        {'default': (SANITIZED_NO_VALUE, "NEW_CF_VALUE1")}
 
     curr_block_align_value = \
         updated_database_options_2_1_0.get_cf_table_option(cf_name,
@@ -198,13 +198,13 @@ def test_find_oeEptions_diff():
                                                        "NEW_CF_TABLE_VALUE1",
                                                        "True")
     expected_diff['TableOptions.BlockBasedTable.NEW_CF_TABLE_OPTION1'] = \
-        {'default': ("No Value", "NEW_CF_TABLE_VALUE1")}
+        {'default': (SANITIZED_NO_VALUE, "NEW_CF_TABLE_VALUE1")}
 
     options_diff_speedb_2_1_0_vs_itself, closest_version =\
-        baseline_log_files_utils.find_options_diff_relative_to_baseline(
+        baseline_utils.find_options_diff_relative_to_baseline(
             baseline_logs_folder_path,
-            defs_and_utils.ProductName.SPEEDB,
-            v("2.1.0"),
+            utils.ProductName.SPEEDB,
+            Ver("2.1.0"),
             updated_database_options_2_1_0)
     assert options_diff_speedb_2_1_0_vs_itself.get_diff_dict() == expected_diff
-    assert closest_version == defs_and_utils.Version("2.1.0")
+    assert closest_version == Ver("2.1.0")

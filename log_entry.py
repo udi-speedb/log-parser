@@ -13,8 +13,9 @@
 # limitations under the License.'''
 
 import re
+
 import regexes
-import defs_and_utils
+import utils
 
 
 class LogEntry:
@@ -25,7 +26,7 @@ class LogEntry:
             return False
 
         # The assumption is that a new log will start with a date
-        if not re.findall(regexes.TIMESTAMP_REGEX, token_list[0]):
+        if not re.findall(regexes.TIMESTAMP, token_list[0]):
             return False
 
         if regex:
@@ -38,14 +39,14 @@ class LogEntry:
     @staticmethod
     def validate_entry_start(line_idx, log_line):
         if not LogEntry.is_entry_start(log_line):
-            raise defs_and_utils.ParsingAssertion(
+            raise utils.ParsingAssertion(
                 "Line isn't entry's start.",
-                defs_and_utils.ErrorContext(**{'log_line': log_line,
-                                               'log_line_idx': line_idx}))
+                utils.ErrorContext(**{'log_line': log_line,
+                                      'log_line_idx': line_idx}))
 
     def validate_finalized(self):
         if not self.is_finalized:
-            raise defs_and_utils.ParsingAssertion(
+            raise utils.ParsingAssertion(
                 f"Entry already finalized. {self}")
 
     def __init__(self, line_idx, log_line, last_line=False):
@@ -55,17 +56,17 @@ class LogEntry:
         self.start_line_idx = line_idx
 
         # Try to parse as a warning line
-        parts = re.findall(regexes.START_LINE_WITH_WARN_PARTS_REGEX, log_line)
+        parts = re.findall(regexes.START_LINE_WITH_WARN_PARTS, log_line)
         if parts:
             num_parts_expected = 6
         else:
             # Not a warning line => Parse as "normal" line
-            parts = re.findall(regexes.START_LINE_PARTS_REGEX, log_line)
+            parts = re.findall(regexes.START_LINE_PARTS, log_line)
             if not parts:
-                raise defs_and_utils.ParsingError(
+                raise utils.ParsingError(
                     "Failed parsing Log Entry start line.",
-                    defs_and_utils.ErrorContext(**{'log_line': log_line,
-                                                   'log_line_idx': line_idx}))
+                    utils.ErrorContext(**{'log_line': log_line,
+                                          'log_line_idx': line_idx}))
             num_parts_expected = 5
 
         assert len(parts) == 1 and len(parts[0]) == num_parts_expected, \
@@ -79,7 +80,7 @@ class LogEntry:
 
         # warn msg
         if num_parts_expected == 6:
-            self.warning_type = defs_and_utils.WarningType(parts[3])
+            self.warning_type = utils.WarningType(parts[3])
             part_increment = 1
         else:
             self.warning_type = None
@@ -99,6 +100,10 @@ class LogEntry:
             # self.msg_lines.append(parts[4 + part_increment].strip())
             self.msg_lines.append(parts[4 + part_increment])
 
+        self.cf_name = None
+        self.job_id = None
+        self.try_parsing_cf_name_and_job_id(log_line)
+
         if last_line:
             self.all_lines_added()
 
@@ -106,17 +111,26 @@ class LogEntry:
         return f"LogEntry (lines:{self.get_lines_idxs_range()}), Start:\n" \
                f"{self.msg_lines[0]}"
 
+    def try_parsing_cf_name_and_job_id(self, log_line):
+        match = re.findall(regexes.CF_WITH_JOB_ID, log_line)
+        if not match:
+            return
+        assert len(match) == 1 and len(match[0]) == 2
+
+        self.cf_name, self.job_id = match[0]
+        self.job_id = int(self.job_id)
+
     def validate_not_finalized(self, log_line=None):
         if self.is_finalized:
             msg = "Entry already finalized."
             if log_line:
                 msg += f". Added line:\n{log_line}\n"
             msg += f"\n{self}"
-            raise defs_and_utils.ParsingAssertion(msg, self.start_line_idx)
+            raise utils.ParsingAssertion(msg, self.start_line_idx)
 
     def validate_not_adding_entry_start_line(self, log_line):
         if LogEntry.is_entry_start(log_line):
-            raise defs_and_utils.ParsingAssertion(
+            raise utils.ParsingAssertion(
                 f"Illegal attempt to add an entry start as a line to "
                 f"an existing entry. Line:\n{log_line}\n{self}")
 
@@ -158,7 +172,7 @@ class LogEntry:
         return self.time
 
     def get_gmt_timestamp(self):
-        return defs_and_utils.get_gmt_timestamp(self.time)
+        return utils.get_gmt_timestamp_us(self.time)
 
     def get_code_pos(self):
         return self.code_pos
@@ -180,3 +194,9 @@ class LogEntry:
 
     def get_warning_type(self):
         return self.warning_type
+
+    def get_cf_name(self):
+        return self.cf_name
+
+    def get_job_id(self):
+        return self.job_id
