@@ -26,7 +26,7 @@ import time
 
 import console_outputter
 import csv_outputter
-import database_options
+import db_options
 import json_outputter
 import utils
 from log_file import ParsedLog
@@ -241,20 +241,20 @@ def generate_csvs_if_applicable(parsed_log, output_folder, report_to_console):
 
     return {
         "Counters":
-            database_options.get_sanitized_value(str(counters_csv_path)),
+            db_options.get_sanitized_value(str(counters_csv_path)),
         "Histograms (Human-Readable)":
-            database_options.get_sanitized_value(
+            db_options.get_sanitized_value(
                 str(human_readable_histograms_csv_file_path)),
         "Histograms (Tools)":
-            database_options.get_sanitized_value(
+            db_options.get_sanitized_value(
                 str(tools_histograms_csv_file_path)),
         "Compactions-Stats":
-            database_options.get_sanitized_value(
+            db_options.get_sanitized_value(
                 str(compactions_stats_csv_path)),
         "Compactions":
-            database_options.get_sanitized_value(
+            db_options.get_sanitized_value(
                 str(compactions_csv_path)),
-        "Flushes": database_options.get_sanitized_value(str(flushes_csv_path))
+        "Flushes": db_options.get_sanitized_value(str(flushes_csv_path))
     }
 
 

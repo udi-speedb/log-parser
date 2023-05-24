@@ -19,7 +19,7 @@ from dataclasses import dataclass
 
 import regexes
 import utils
-from database_options import DatabaseOptions
+from db_options import DatabaseOptions
 from log_file import ParsedLog
 
 
@@ -158,7 +158,7 @@ def get_baseline_database_options(baselines_logs_folder,
 def find_options_diff_relative_to_baseline(baselines_logs_folder,
                                            product_name,
                                            version,
-                                           database_options):
+                                           db_options):
     baseline_info = get_baseline_database_options(baselines_logs_folder,
                                                   product_name,
                                                   version)
@@ -168,5 +168,5 @@ def find_options_diff_relative_to_baseline(baselines_logs_folder,
     baseline_database_options, closest_version = baseline_info
     diff = DatabaseOptions.get_options_diff(
         baseline_database_options.get_all_options(),
-        database_options.get_all_options())
+        db_options.get_all_options())
     return diff, closest_version

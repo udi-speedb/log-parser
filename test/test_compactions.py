@@ -1,8 +1,7 @@
 import pytest
 
+import compactions
 import utils
-from compactions import CompactionJobInfo, CompactionState, \
-    CompactionsMonitor, PreFinishStatsInfo
 from events import EventType
 from test.testing_utils import create_event, line_to_entry
 
@@ -33,8 +32,8 @@ input_files = {
 
 
 def test_compaction_info():
-    info = CompactionJobInfo(job_id1)
-    assert info.get_state() == CompactionState.WAITING_START
+    info = compactions.CompactionJobInfo(job_id1)
+    assert info.get_state() == compactions.CompactionState.WAITING_START
 
     start_event1 = create_event(job_id1, cf_names, time1_minus_10_sec,
                                 EventType.COMPACTION_STARTED, cf1,
@@ -54,7 +53,7 @@ def test_compaction_info():
         info.set_finish_event(finish_event1)
 
     info.set_start_event(start_event2)
-    assert info.get_state() == CompactionState.STARTED
+    assert info.get_state() == compactions.CompactionState.STARTED
     with pytest.raises(utils.ParsingError):
         info.set_start_event(start_event1)
 
@@ -62,14 +61,14 @@ def test_compaction_info():
         info.set_finish_event(finish_event1)
 
     info.set_finish_event(finish_event2)
-    assert info.get_state() == CompactionState.FINISHED
+    assert info.get_state() == compactions.CompactionState.FINISHED
 
     with pytest.raises(utils.ParsingError):
         info.set_finish_event(finish_event3)
 
 
 def test_mon_basic():
-    monitor = CompactionsMonitor()
+    monitor = compactions.CompactionsMonitor()
     assert monitor.get_finished_jobs() == {}
 
     # Compaction Job 1 - Start + Finish Events
@@ -84,11 +83,13 @@ def test_mon_basic():
                                  EventType.COMPACTION_FINISHED, cf1)
     monitor.new_event(finish_event1)
 
-    expected_jobs = {job_id1: CompactionJobInfo(job_id1,
-                                                cf_name=cf1,
-                                                start_event=start_event1,
-                                                finish_event=finish_event1,
-                                                pre_finish_info=None)}
+    expected_jobs = {
+        job_id1: compactions.CompactionJobInfo(job_id1,
+                                               cf_name=cf1,
+                                               start_event=start_event1,
+                                               finish_event=finish_event1,
+                                               pre_finish_info=None)
+    }
     assert monitor.get_finished_jobs() == expected_jobs
 
     # Compaction Job 2 - Start + Finish Events
@@ -102,24 +103,29 @@ def test_mon_basic():
                                  EventType.COMPACTION_FINISHED, cf2)
     monitor.new_event(finish_event2)
 
-    expected_jobs[job_id2] = CompactionJobInfo(job_id2,
-                                               cf_name=cf2,
-                                               start_event=start_event2,
-                                               finish_event=finish_event2)
+    expected_jobs[job_id2] = \
+        compactions.CompactionJobInfo(job_id2,
+                                      cf_name=cf2,
+                                      start_event=start_event2,
+                                      finish_event=finish_event2)
     assert monitor.get_finished_jobs() == expected_jobs
 
-    expected_cf1_jobs = {job_id1: CompactionJobInfo(job_id1,
-                                                    cf_name=cf1,
-                                                    start_event=start_event1,
-                                                    finish_event=finish_event1,
-                                                    pre_finish_info=None)}
+    expected_cf1_jobs = {
+        job_id1: compactions.CompactionJobInfo(job_id1,
+                                               cf_name=cf1,
+                                               start_event=start_event1,
+                                               finish_event=finish_event1,
+                                               pre_finish_info=None)
+    }
     assert monitor.get_cf_finished_jobs(cf1) == expected_cf1_jobs
 
-    expected_cf2_jobs = {job_id2: CompactionJobInfo(job_id2,
-                                                    cf_name=cf2,
-                                                    start_event=start_event2,
-                                                    finish_event=finish_event2,
-                                                    pre_finish_info=None)}
+    expected_cf2_jobs = {
+        job_id2: compactions.CompactionJobInfo(job_id2,
+                                               cf_name=cf2,
+                                               start_event=start_event2,
+                                               finish_event=finish_event2,
+                                               pre_finish_info=None)
+    }
     assert monitor.get_cf_finished_jobs(cf2) == expected_cf2_jobs
 
 
@@ -156,27 +162,28 @@ def test_try_parse_as_pre_finish_stats_line():
                                 EventType.COMPACTION_FINISHED, cf2,
                                 num_input_records=records_in)
 
-    monitor = CompactionsMonitor()
+    monitor = compactions.CompactionsMonitor()
     monitor.new_event(start_event)
     assert monitor.consider_entry(pre_fihish_entry)
     monitor.new_event(finish_event)
 
     expected_pre_finish_info = \
-        PreFinishStatsInfo(cf_name=cf2,
-                           max_score=max_score,
-                           read_rate_mbps=read_rate_mbps,
-                           write_rate_mbps=write_rate_mbps,
-                           read_write_amplify=read_write_amplify,
-                           write_amplify=write_amplify,
-                           records_in=records_in,
-                           records_dropped=records_dropped)
+        compactions.PreFinishStatsInfo(cf_name=cf2,
+                                       max_score=max_score,
+                                       read_rate_mbps=read_rate_mbps,
+                                       write_rate_mbps=write_rate_mbps,
+                                       read_write_amplify=read_write_amplify,
+                                       write_amplify=write_amplify,
+                                       records_in=records_in,
+                                       records_dropped=records_dropped)
 
     expected_jobs = {
-        job_id1: CompactionJobInfo(job_id=job_id1,
-                                   cf_name=cf2,
-                                   start_event=start_event,
-                                   finish_event=finish_event,
-                                   pre_finish_info=expected_pre_finish_info)
+        job_id1: compactions.CompactionJobInfo(
+            job_id=job_id1,
+            cf_name=cf2,
+            start_event=start_event,
+            finish_event=finish_event,
+            pre_finish_info=expected_pre_finish_info)
     }
     assert monitor.get_finished_jobs() == expected_jobs
 
@@ -191,10 +198,10 @@ def test_try_parse_as_pre_finish_stats_line():
 #                       f"[{cf1}] [JOB {job_id1}] "
 #                       f"Compacting 4@0 + 3@1 files to L{level}, "
 #                       f"score {before_score}")
-#     monitor = CompactionsMonitor()
+#     monitor = compactions.CompactionsMonitor()
 #     assert monitor.consider_entry(score_entry)
 #
-#     expected_jobs = {job_id1: CompactionJobInfo(job_id1,
+#     expected_jobs = {job_id1: compactions.CompactionJobInfo(job_id1,
 #                                                 cf_name=cf1,
 #                                                 before_score=before_score,
 #                                                 input_files={})}

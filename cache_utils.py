@@ -3,9 +3,9 @@ from dataclasses import dataclass
 
 import db_files
 from counters import CountersAndHistogramsMngr
-from database_options import RAW_NULL_PTR, DatabaseOptions, \
-    sanitized_to_raw_ptr_value
 from db_files import DbFilesMonitor
+from db_options import RAW_NULL_PTR, DatabaseOptions, \
+    sanitized_to_raw_ptr_value
 
 
 def get_cf_raw_cache_ptr_str(cf_name, db_options):
@@ -18,7 +18,7 @@ def get_cf_raw_cache_ptr_str(cf_name, db_options):
 
 def does_cf_has_cache(cf_name, db_options):
     raw_ptr_str = db_options.get_cf_table_raw_ptr_str(cf_name, "block_cache")
-    return raw_ptr_str != RAW_NULL_PTR
+    return raw_ptr_str is not None and raw_ptr_str != RAW_NULL_PTR
 
 
 def get_cache_id(cf_name, db_options):
@@ -26,6 +26,10 @@ def get_cache_id(cf_name, db_options):
 
     cache_ptr = db_options.get_cf_table_raw_ptr_str(cf_name, "block_cache")
     cache_name = db_options.get_cf_table_option(cf_name, "block_cache_name")
+
+    if cache_ptr is None or cache_name is None:
+        return None
+
     return f"{cache_name}@{cache_ptr}"
 
 
@@ -58,16 +62,30 @@ def collect_cf_cache_options(cf_name, db_options):
     if not does_cf_has_cache(cf_name, db_options):
         return None
 
-    options = CfCacheOptions(cf_name)
-    options.cache_id = get_cache_id(cf_name, db_options)
-    options.cache_index_and_filter_blocks = \
+    cache_id = get_cache_id(cf_name, db_options)
+    cache_index_and_filter_blocks = \
         db_options.get_cf_table_option(
             cf_name, "cache_index_and_filter_blocks")
-    options.cache_capacity_bytes = \
-        int(db_options.get_cf_table_option(cf_name, "block_cache_capacity"))
-    options.num_shard_bits = \
-        int(db_options.get_cf_table_option(
-            cf_name, "block_cache_num_shard_bits"))
+    cache_capacity_bytes_str = \
+        db_options.get_cf_table_option(cf_name, "block_cache_capacity")
+    num_shard_bits_str = \
+        db_options.get_cf_table_option(cf_name, "block_cache_num_shard_bits")
+
+    if cache_id is None or cache_index_and_filter_blocks is None or \
+            cache_capacity_bytes_str is None or num_shard_bits_str is None:
+        logging.warning(
+            f"{cf_name} has cache but its cache options are "
+            f"corrupted. cache_id:{cache_id}, "
+            f"cache_index_and_filter_blocks:{cache_index_and_filter_blocks}"
+            f"cache_capacity_bytes_str:{cache_capacity_bytes_str}"
+            f"num_shard_bits_str:{num_shard_bits_str}")
+        return None
+
+    options = CfCacheOptions(cf_name)
+    options.cache_id = cache_id
+    options.cache_index_and_filter_blocks = cache_index_and_filter_blocks
+    options.cache_capacity_bytes = int(cache_capacity_bytes_str)
+    options.num_shard_bits = int(num_shard_bits_str)
 
     return options
 

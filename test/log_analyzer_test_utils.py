@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.'''
 
-from log_entry import LogEntry
+import log_entry
 
 
 def read_sample_file(file_name, expected_num_entries):
@@ -22,10 +22,10 @@ def read_sample_file(file_name, expected_num_entries):
     entries = []
     entry = None
     for i, line in enumerate(lines):
-        if LogEntry.is_entry_start(line):
+        if log_entry.LogEntry.is_entry_start(line):
             if entry:
                 entries.append(entry.all_lines_added())
-            entry = LogEntry(i, line)
+            entry = log_entry.LogEntry(i, line)
         else:
             assert entry
             entry.add_line(line)

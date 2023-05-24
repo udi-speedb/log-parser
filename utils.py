@@ -63,6 +63,8 @@ DEFAULT_FLUSHES_FILE_NAME = "flushes.csv"
 
 
 def get_last_dict_entry(d):
+    assert d is None or isinstance(d, dict)
+
     if not d:
         return None
     key = list(d.keys())[-1]
@@ -70,6 +72,8 @@ def get_last_dict_entry(d):
 
 
 def get_first_dict_entry_components(d):
+    assert d is None or isinstance(d, dict)
+
     if not d:
         return None
     key = list(d.keys())[0]
@@ -77,6 +81,8 @@ def get_first_dict_entry_components(d):
 
 
 def get_last_dict_entry_components(d):
+    assert d is None or isinstance(d, dict)
+
     if not d:
         return None
     key = list(d.keys())[-1]

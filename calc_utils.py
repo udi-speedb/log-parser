@@ -44,20 +44,30 @@ def get_db_size_bytes_at_start(compaction_stats_mngr):
                 cf_entry, CompactionStatsMngr.LevelFields.SIZE_BYTES))
 
 
-def get_db_size_bytes_at_end(compaction_stats_mngr):
+@dataclass
+class DbSizeBytesInfo:
+    size_time: str = None
+    size_bytes: int = 0
+
+
+def get_db_size_bytes_info_at_end(compaction_stats_mngr):
     assert isinstance(compaction_stats_mngr, CompactionStatsMngr)
 
     last_entry_all_cfs = compaction_stats_mngr.get_last_level_entry_all_cfs()
     if not last_entry_all_cfs:
-        return 0
+        return DbSizeBytesInfo(size_time=None, size_bytes=0)
 
     size_bytes = 0
+    size_time = None
     for cf_name, cf_entry in last_entry_all_cfs.items():
+        if size_time is None:
+            size_time, _ = utils.get_last_dict_entry_components(cf_entry)
+
         size_bytes += \
             int(CompactionStatsMngr.get_sum_value(
                 cf_entry, CompactionStatsMngr.LevelFields.SIZE_BYTES))
 
-    return size_bytes
+    return DbSizeBytesInfo(size_time=size_time, size_bytes=size_bytes)
 
 
 def get_per_cf_per_level_size_bytes(entry_all_cfs):
@@ -198,6 +208,21 @@ def get_user_operations_stats(counters_and_histograms_mngr):
     }
 
 
+@dataclass
+class LogFileTimeInfo:
+    start_time: str = None
+    end_time: str = None
+    span_seconds: float = 0.0
+
+
+def get_log_file_time_info(parsed_log):
+    metadata = parsed_log.get_metadata()
+
+    return LogFileTimeInfo(start_time=metadata.get_start_time(),
+                           end_time=metadata.get_end_time(),
+                           span_seconds=metadata.get_log_time_span_seconds())
+
+
 def get_db_wide_info(parsed_log: ParsedLog):
     metadata = parsed_log.get_metadata()
     warns_mngr = parsed_log.get_warnings_mngr()
@@ -251,11 +276,15 @@ def get_db_wide_info(parsed_log: ParsedLog):
     compactions_stats_mngr = \
         parsed_log.get_stats_mngr().get_compactions_stats_mngr()
 
+    db_size_bytes_info = get_db_size_bytes_info_at_end(compactions_stats_mngr)
+    assert isinstance(db_size_bytes_info, DbSizeBytesInfo)
+
     info = {
         "creator": metadata.get_product_name(),
         "version": metadata.get_version(),
         "git_hash": metadata.get_git_hash(),
-        "db_size_bytes": get_db_size_bytes_at_end(compactions_stats_mngr),
+        "db_size_bytes": db_size_bytes_info.size_bytes,
+        "db_size_bytes_time": db_size_bytes_info.size_time,
         "num_cfs": len(parsed_log.get_cfs_names()),
         "avg_key_size_bytes": avg_key_size_bytes,
         "avg_value_size_bytes": avg_value_size_bytes,
@@ -575,6 +604,11 @@ def calc_cf_read_density(compactions_stats_mngr, cf_file_histogram_stats_mngr,
                          cf_read_latecny_stats, cf_name):
     assert isinstance(cf_read_latecny_stats, CfReadLatencyStats)
 
+    last_cf_compaction_stats_entry = \
+        compactions_stats_mngr.get_last_cf_level_entry(cf_name)
+    if not last_cf_compaction_stats_entry:
+        return None
+
     last_cf_read_latency_raw_entry = \
         cf_file_histogram_stats_mngr.get_last_cf_entry(cf_name)
     last_cf_read_latency_entry = \
@@ -592,8 +626,6 @@ def calc_cf_read_density(compactions_stats_mngr, cf_file_histogram_stats_mngr,
             last_cf_read_latency_entry.get_all_levels_stats().items():
         per_level_read_norm[level] = level_stats.count / total_num_cf_reads
 
-    last_cf_compaction_stats_entry = \
-        compactions_stats_mngr.get_last_cf_level_entry(cf_name)
     compaction_entry = CompactionStatsMngr.CfLevelEntry(
         last_cf_compaction_stats_entry)
 
@@ -602,7 +634,7 @@ def calc_cf_read_density(compactions_stats_mngr, cf_file_histogram_stats_mngr,
     if total_cf_size_bytes == 0:
         logging.info(f"No read density as cf ({cf_name}) size if 0 "
                      f"time:{compaction_entry.get_time()} ")
-        return {}
+        return None
 
     # Calculate per level SIZE-NORM
     per_level_size_norm = dict()
@@ -846,6 +878,8 @@ def calc_bloom_1_in_fpr(counters):
     assert isinstance(counters, FilterCounters)
     total = counters.negatives + counters.positives
     false_positives = counters.false_positives
+    if false_positives == 0:
+        return 0
     return int(total / false_positives)
 
 

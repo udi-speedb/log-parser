@@ -16,9 +16,8 @@ from datetime import datetime, timedelta
 
 import pytest
 
+import events
 import utils
-from events import Event, EventsMngr, EventType, FlowType, \
-    MatchingEventTypeInfo, MatchingEventInfo, CompactionStartedEvent
 from log_entry import LogEntry
 from test.testing_utils import create_event_entry, create_event, entry_to_event
 
@@ -33,11 +32,11 @@ def test_compaction_started_event():
     files_l2 = [16778, 16779, 16780, 16781, 17022]
 
     event = create_event(job_id, cf_names, time,
-                         EventType.COMPACTION_STARTED, cf,
+                         events.EventType.COMPACTION_STARTED, cf,
                          compaction_reason=reason,
                          files_L1=files_l1, files_L2=files_l2)
 
-    assert isinstance(event, CompactionStartedEvent)
+    assert isinstance(event, events.CompactionStartedEvent)
     assert event.get_compaction_reason() == reason
     assert event.get_input_files() == {
         1: files_l1,
@@ -53,11 +52,11 @@ def test_table_file_creation_event():
     cf_names = [cf]
     table_properties = {}
     event = create_event(job_id, cf_names, time,
-                         EventType.TABLE_FILE_CREATION, cf,
+                         events.EventType.TABLE_FILE_CREATION, cf,
                          file_number=file_number,
                          table_properties=table_properties)
 
-    assert event.get_type() == EventType.TABLE_FILE_CREATION.value
+    assert event.get_type() == events.EventType.TABLE_FILE_CREATION.value
     assert event.get_created_file_number() == file_number
     assert event.get_cf_id() is None
     assert event.get_compressed_data_size_bytes() == 0
@@ -85,11 +84,11 @@ def test_table_file_creation_event():
         "num_filter_entries": 800}
 
     event2 = create_event(job_id, cf_names, time,
-                          EventType.TABLE_FILE_CREATION, cf,
+                          events.EventType.TABLE_FILE_CREATION, cf,
                           file_number=file_number,
                           table_properties=table_properties2)
 
-    assert event2.get_type() == EventType.TABLE_FILE_CREATION.value
+    assert event2.get_type() == events.EventType.TABLE_FILE_CREATION.value
     assert event2.get_created_file_number() == file_number
     assert event2.get_cf_id() == 1
     assert event2.get_compressed_data_size_bytes() == 100
@@ -112,9 +111,9 @@ def test_table_file_deletion_event():
     cf = "cf1"
     cf_names = [cf]
     event = create_event(job_id, cf_names, time,
-                         EventType.TABLE_FILE_DELETION, cf,
+                         events.EventType.TABLE_FILE_DELETION, cf,
                          file_number=file_number)
-    assert event.get_type() == EventType.TABLE_FILE_DELETION.value
+    assert event.get_type() == events.EventType.TABLE_FILE_DELETION.value
     assert event.get_deleted_file_number() == file_number
 
 
@@ -170,11 +169,11 @@ def test_table_file_creation_event1():
         "orig_file_number": 37155}
 
     event = create_event(job_id, cf_names, time,
-                         EventType.TABLE_FILE_CREATION, cf,
+                         events.EventType.TABLE_FILE_CREATION, cf,
                          file_number=file_number,
                          table_properties=table_properties)
 
-    assert event.get_type() == EventType.TABLE_FILE_CREATION.value
+    assert event.get_type() == events.EventType.TABLE_FILE_CREATION.value
     assert event.get_created_file_number() == file_number
     assert event.get_cf_id() == cf_id
     assert event.get_compressed_data_size_bytes() == compressed_data_size_bytes
@@ -197,69 +196,76 @@ def verify_expected_events(events_mngr, expected_events_dict):
     expected_cf_events_per_type = dict()
     for name in cf_names:
         expected_cf_events_per_type[name] = {event_type: [] for event_type
-                                             in EventType}
+                                             in events.EventType}
 
     for cf_name, cf_events_entries in expected_events_dict.items():
-        expected_cf_events = [Event(event_entry, cf_names) for event_entry
-                              in cf_events_entries]
+        expected_cf_events = \
+            [events.Event(event_entry, cf_names) for event_entry in
+             cf_events_entries]
         assert events_mngr.get_cf_events(cf_name) == expected_cf_events
 
         for event in expected_cf_events:
             expected_cf_events_per_type[cf_name][event.get_type()].append(
                 event)
 
-        for event_type in EventType:
+        for event_type in events.EventType:
             assert events_mngr.get_cf_events_by_type(cf_name, event_type) ==\
                    expected_cf_events_per_type[cf_name][event_type]
 
 
 def test_event_type():
-    assert EventType.type_from_str("flush_finished") == \
-           EventType.FLUSH_FINISHED
-    assert str(EventType.type_from_str("flush_finished")) == "flush_finished"
+    assert events.EventType.type_from_str("flush_finished") == \
+           events.EventType.FLUSH_FINISHED
+    assert str(events.EventType.type_from_str("flush_finished")) == \
+           "flush_finished"
 
-    assert EventType.type_from_str("Dummy") == EventType.UNKNOWN
-    assert str(EventType.type_from_str("Dummy")) == "UNKNOWN"
+    assert events.EventType.type_from_str("Dummy") == events.EventType.UNKNOWN
+    assert str(events.EventType.type_from_str("Dummy")) == "UNKNOWN"
 
 
 def test_get_matching_type_info_if_exists():
-    assert Event.get_matching_type_info_if_exists(EventType.FLUSH_STARTED) == \
-           MatchingEventTypeInfo(
-               EventType.FLUSH_FINISHED, FlowType.FLUSH, False)
-    assert Event.get_matching_type_info_if_exists(
-        EventType.FLUSH_FINISHED) == MatchingEventTypeInfo(
-        EventType.FLUSH_STARTED, FlowType.FLUSH, True)
-    assert Event.get_matching_type_info_if_exists(
-        EventType.COMPACTION_STARTED) == \
-        MatchingEventTypeInfo(
-            EventType.COMPACTION_FINISHED, FlowType.COMPACTION, False)
-    assert Event.get_matching_type_info_if_exists(
-        EventType.COMPACTION_FINISHED) == \
-        MatchingEventTypeInfo(EventType.COMPACTION_STARTED,
-                              FlowType.COMPACTION, True)
-    assert Event.get_matching_type_info_if_exists(
-        EventType.RECOVERY_STARTED) == \
-        MatchingEventTypeInfo(EventType.RECOVERY_FINISHED,
-                              FlowType.RECOVERY, False)
-    assert Event.get_matching_type_info_if_exists(
-        EventType.RECOVERY_FINISHED) == \
-        MatchingEventTypeInfo(EventType.RECOVERY_STARTED,
-                              FlowType.RECOVERY, True)
+    assert events.Event.\
+           get_matching_type_info_if_exists(
+            events.EventType.FLUSH_STARTED) == \
+           events.MatchingEventTypeInfo(
+               events.EventType.FLUSH_FINISHED, events.FlowType.FLUSH, False)
+    assert events.Event.get_matching_type_info_if_exists(
+        events.EventType.FLUSH_FINISHED) == events.MatchingEventTypeInfo(
+        events.EventType.FLUSH_STARTED, events.FlowType.FLUSH, True)
+    assert events.Event.get_matching_type_info_if_exists(
+        events.EventType.COMPACTION_STARTED) == \
+        events.MatchingEventTypeInfo(
+            events.EventType.COMPACTION_FINISHED, events.FlowType.COMPACTION,
+            False)
+    assert events.Event.get_matching_type_info_if_exists(
+        events.EventType.COMPACTION_FINISHED) == \
+        events.MatchingEventTypeInfo(events.EventType.COMPACTION_STARTED,
+                                     events.FlowType.COMPACTION, True)
+    assert events.Event.get_matching_type_info_if_exists(
+        events.EventType.RECOVERY_STARTED) == \
+        events.MatchingEventTypeInfo(events.EventType.RECOVERY_FINISHED,
+                                     events.FlowType.RECOVERY, False)
+    assert events.Event.get_matching_type_info_if_exists(
+        events.EventType.RECOVERY_FINISHED) == \
+        events.MatchingEventTypeInfo(events.EventType.RECOVERY_STARTED,
+                                     events.FlowType.RECOVERY, True)
 
-    assert Event.get_matching_type_info_if_exists(
-        EventType.TABLE_FILE_CREATION) is None
-    assert Event.get_matching_type_info_if_exists(
-        EventType.TABLE_FILE_DELETION) is None
-    assert Event.get_matching_type_info_if_exists(EventType.TRIVIAL_MOVE) \
+    assert events.Event.get_matching_type_info_if_exists(
+        events.EventType.TABLE_FILE_CREATION) is None
+    assert events.Event.get_matching_type_info_if_exists(
+        events.EventType.TABLE_FILE_DELETION) is None
+    assert events.Event.\
+           get_matching_type_info_if_exists(events.EventType.TRIVIAL_MOVE) \
            is None
-    assert Event.get_matching_type_info_if_exists(EventType.INGEST_FINISHED) \
+    assert events.Event.\
+           get_matching_type_info_if_exists(events.EventType.INGEST_FINISHED) \
            is None
-    assert Event.get_matching_type_info_if_exists(
-        EventType.BLOB_FILE_CREATION) is None
-    assert Event.get_matching_type_info_if_exists(
-        EventType.BLOB_FILE_DELETION) is None
-    assert Event.get_matching_type_info_if_exists(EventType.UNKNOWN) \
-           is None
+    assert events.Event.get_matching_type_info_if_exists(
+        events.EventType.BLOB_FILE_CREATION) is None
+    assert events.Event.get_matching_type_info_if_exists(
+        events.EventType.BLOB_FILE_DELETION) is None
+    assert events.Event.\
+           get_matching_type_info_if_exists(events.EventType.UNKNOWN) is None
 
 
 def test_matching_event_info_get_duration_ms():
@@ -268,9 +274,10 @@ def test_matching_event_info_get_duration_ms():
     start_event_time = "2023/01/04-08:54:59.130996"
     start_event = create_event(
         job_id, cf_names, start_event_time,
-        event_type=EventType.FLUSH_STARTED, flush_reason="Reason1")
-    start_event_info = MatchingEventInfo(start_event, FlowType.FLUSH,
-                                         is_start=True)
+        event_type=events.EventType.FLUSH_STARTED, flush_reason="Reason1")
+    start_event_info = \
+        events.MatchingEventInfo(start_event, events.FlowType.FLUSH,
+                                 is_start=True)
 
     start_datetime = datetime.strptime(f"{start_event_time}GMT",
                                        "%Y/%m/%d-%H:%M:%S.%f%Z")
@@ -279,9 +286,10 @@ def test_matching_event_info_get_duration_ms():
     end_datetime = start_datetime + time_delta_ms
     end_event_time = end_datetime.strftime("%Y/%m/%d-%H:%M:%S.%f")
     end_event = create_event(
-        job_id, cf_names, end_event_time, event_type=EventType.FLUSH_FINISHED)
-    end_event_info = MatchingEventInfo(end_event, FlowType.FLUSH,
-                                       is_start=False)
+        job_id, cf_names, end_event_time,
+        event_type=events.EventType.FLUSH_FINISHED)
+    end_event_info = events.MatchingEventInfo(
+        end_event, events.FlowType.FLUSH, is_start=False)
 
     assert start_event_info.get_duration_ms(end_event_info) == delta_ms
     assert end_event_info.get_duration_ms(start_event_info) == delta_ms
@@ -292,27 +300,27 @@ def test_event(cf_name):
     cf_names = [cf_name]
     job_id = 35
     event_entry = create_event_entry(job_id, "2022/04/17-14:42:19.220573",
-                                     EventType.FLUSH_FINISHED, cf_name)
+                                     events.EventType.FLUSH_FINISHED, cf_name)
 
-    assert Event.is_an_event_entry(event_entry, cf_names)
-    assert not Event.try_parse_event_preamble(event_entry, cf_names)
+    assert events.Event.is_an_event_entry(event_entry, cf_names)
+    assert not events.Event.try_parse_event_preamble(event_entry, cf_names)
 
-    event1 = Event(event_entry, cf_names)
-    assert event1.get_type() == EventType.FLUSH_FINISHED
+    event1 = events.Event(event_entry, cf_names)
+    assert event1.get_type() == events.EventType.FLUSH_FINISHED
     assert event1.get_job_id() == 35
     assert event1.get_cf_name() == cf_name
     assert not event1.is_db_wide_event()
     assert event1.is_cf_event()
     assert event1.get_my_matching_type_info_if_exists() == \
-           MatchingEventTypeInfo(
-               EventType.FLUSH_STARTED, FlowType.FLUSH, True)
+           events.MatchingEventTypeInfo(
+               events.EventType.FLUSH_STARTED, events.FlowType.FLUSH, True)
     event1 = None
 
     # Unknown event (legal)
     event_entry = create_event_entry(job_id, "2022/04/17-14:42:19.220573",
-                                     EventType.UNKNOWN, cf_name)
-    event2 = Event(event_entry, cf_names)
-    assert event2.get_type() == EventType.UNKNOWN
+                                     events.EventType.UNKNOWN, cf_name)
+    event2 = events.Event(event_entry, cf_names)
+    assert event2.get_type() == events.EventType.UNKNOWN
     assert event2.get_job_id() == 35
     assert event2.get_cf_name() == cf_name
     assert not event2.is_db_wide_event()
@@ -334,22 +342,23 @@ def test_event_preamble(cf_name):
 
     preamble_entry = LogEntry(0, preamble_line, True)
     event_entry = create_event_entry(job_id, "2022/11/24-15:58:17.683316",
-                                     EventType.FLUSH_STARTED,
+                                     events.EventType.FLUSH_STARTED,
                                      utils.NO_CF, flush_reason="REASON1")
 
-    assert not Event.try_parse_event_preamble(event_entry, ["dummy_cf"])
+    assert not events.Event.try_parse_event_preamble(event_entry, ["dummy_cf"])
 
-    preamble_info = Event.try_parse_event_preamble(preamble_entry, cf_names)
+    preamble_info = \
+        events.Event.try_parse_event_preamble(preamble_entry, cf_names)
     assert preamble_info
     assert preamble_info.job_id == 8
-    assert preamble_info.type == EventType.FLUSH_STARTED
+    assert preamble_info.type == events.EventType.FLUSH_STARTED
     assert preamble_info.cf_name == cf_name
 
-    assert Event.is_an_event_entry(event_entry, cf_names)
-    assert not Event.try_parse_event_preamble(event_entry, cf_names)
+    assert events.Event.is_an_event_entry(event_entry, cf_names)
+    assert not events.Event.try_parse_event_preamble(event_entry, cf_names)
 
-    event = Event.create_event(event_entry, cf_names)
-    assert event.get_type() == EventType.FLUSH_STARTED
+    event = events.Event.create_event(event_entry, cf_names)
+    assert event.get_type() == events.EventType.FLUSH_STARTED
     assert event.get_job_id() == 8
     assert event.get_cf_name() == utils.NO_CF
     assert event.is_db_wide_event()
@@ -363,24 +372,24 @@ def test_event_preamble(cf_name):
     assert event.is_cf_event()
     assert event.get_wal_id_if_available() == '5'
     assert event.get_my_matching_type_info_if_exists() == \
-           MatchingEventTypeInfo(
-               EventType.FLUSH_FINISHED, FlowType.FLUSH, False)
+           events.MatchingEventTypeInfo(
+               events.EventType.FLUSH_FINISHED, events.FlowType.FLUSH, False)
     assert event.get_matching_event_info_if_exists() is None
 
-    compaction_finished_event = create_event(job_id, cf_names,
-                                             "2022/11/24-15:59:17.683316",
-                                             EventType.COMPACTION_FINISHED,
-                                             cf_name)
+    compaction_finished_event = \
+        create_event(job_id, cf_names, "2022/11/24-15:59:17.683316",
+                     events.EventType.COMPACTION_FINISHED, cf_name)
     event.try_adding_matching_event(compaction_finished_event)
     assert event.get_matching_event_info_if_exists() is None
 
     flush_end_event = create_event(job_id, cf_names,
                                    "2022/11/24-15:59:17.683316",
-                                   EventType.FLUSH_FINISHED,
+                                   events.EventType.FLUSH_FINISHED,
                                    cf_name)
     event.try_adding_matching_event(flush_end_event)
     assert event.get_matching_event_info_if_exists() ==\
-           MatchingEventInfo(flush_end_event, FlowType.FLUSH, is_start=False)
+           events.MatchingEventInfo(flush_end_event, events.FlowType.FLUSH,
+                                    is_start=False)
 
 
 def test_illegal_events():
@@ -389,27 +398,28 @@ def test_illegal_events():
 
     # Illegal event json
     event_entry = create_event_entry(35, "2022/04/17-14:42:19.220573",
-                                     EventType.FLUSH_FINISHED, cf1,
+                                     events.EventType.FLUSH_FINISHED, cf1,
                                      make_illegal_json=True)
-    assert Event.try_parse_event_preamble(event_entry, cf_names) is None
+    assert events.Event.try_parse_event_preamble(event_entry, cf_names) is None
     with pytest.raises(utils.ParsingError):
-        Event.create_event(event_entry, cf_names)
+        events.Event.create_event(event_entry, cf_names)
 
     # Missing Job id (illegal)
     event_entry = create_event_entry(None, "2022/04/17-14:42:19.220573",
-                                     EventType.FLUSH_FINISHED, cf_name=cf1)
-    assert Event.try_parse_event_preamble(event_entry, cf_names) is None
-    assert Event.is_an_event_entry(event_entry, [cf1])
+                                     events.EventType.FLUSH_FINISHED,
+                                     cf_name=cf1)
+    assert events.Event.try_parse_event_preamble(event_entry, cf_names) is None
+    assert events.Event.is_an_event_entry(event_entry, [cf1])
     with pytest.raises(utils.ParsingError):
-        Event.create_event(event_entry, cf_names)
+        events.Event.create_event(event_entry, cf_names)
 
-    # Missing Event Type (definitely illegal)
+    # Missing events.Event Type (definitely illegal)
     event_entry = create_event_entry(200, "2022/04/17-14:42:19.220573",
                                      event_type=None, cf_name=cf1)
-    assert Event.try_parse_event_preamble(event_entry, cf_names) is None
-    assert Event.is_an_event_entry(event_entry, [cf1])
+    assert events.Event.try_parse_event_preamble(event_entry, cf_names) is None
+    assert events.Event.is_an_event_entry(event_entry, [cf1])
     with pytest.raises(utils.ParsingError):
-        Event.create_event(event_entry, cf_names)
+        events.Event.create_event(event_entry, cf_names)
 
 
 def test_handling_same_job_id_multiple_cfs():
@@ -422,22 +432,22 @@ def test_handling_same_job_id_multiple_cfs():
     job_id = 1
     job_id_to_cf_name_map = {job_id: cf1}
 
-    events_mngr = EventsMngr(job_id_to_cf_name_map, cf_names)
+    events_mngr = events.EventsMngr(job_id_to_cf_name_map, cf_names)
 
     event_entry_cf1 = create_event_entry(job_id, event1_time,
-                                         EventType.FLUSH_STARTED, cf1,
+                                         events.EventType.FLUSH_STARTED, cf1,
                                          flush_reason="FLUSH_REASON1")
     event_cf1 = entry_to_event(event_entry_cf1, cf_names)
     assert events_mngr.try_adding_entry(event_entry_cf1) ==\
            (True, event_cf1, cf1)
 
     event_entry_cf2 = create_event_entry(job_id, event2_time,
-                                         EventType.FLUSH_FINISHED, cf2)
+                                         events.EventType.FLUSH_FINISHED, cf2)
     assert events_mngr.try_adding_entry(event_entry_cf2) == (True, None, None)
 
     # Now adding without a cf => should match the event to the 1st one
     event_entry_cf3 = create_event_entry(job_id, event3_time,
-                                         EventType.FLUSH_FINISHED,
+                                         events.EventType.FLUSH_FINISHED,
                                          utils.NO_CF)
     event_no_cf = entry_to_event(event_entry_cf3, cf_names)
     event_no_cf.set_cf_name(cf1)
@@ -452,23 +462,23 @@ def test_adding_events_to_events_mngr():
     job_id2 = 2
     cf_names = [cf1, cf2]
     job_id_to_cf_name_map = {job_id1: cf1, job_id2: cf2}
-    events_mngr = EventsMngr(job_id_to_cf_name_map, cf_names)
+    events_mngr = events.EventsMngr(job_id_to_cf_name_map, cf_names)
 
     assert not events_mngr.get_cf_events(cf1)
-    assert not events_mngr.get_cf_events_by_type(cf2,
-                                                 EventType.FLUSH_FINISHED)
+    assert not events_mngr.\
+        get_cf_events_by_type(cf2, events.EventType.FLUSH_FINISHED)
 
     expected_events_entries = {cf1: [], cf2: []}
 
     event1_entry = create_event_entry(job_id1, "2022/04/17-14:42:19.220573",
-                                      EventType.FLUSH_FINISHED, cf1)
+                                      events.EventType.FLUSH_FINISHED, cf1)
     event1 = entry_to_event(event1_entry, cf_names)
     assert events_mngr.try_adding_entry(event1_entry) == (True, event1, cf1)
     expected_events_entries[cf1] = [event1_entry]
     verify_expected_events(events_mngr, expected_events_entries)
 
     event2_entry = create_event_entry(job_id2, "2022/04/18-14:42:19.220573",
-                                      EventType.FLUSH_STARTED, cf2,
+                                      events.EventType.FLUSH_STARTED, cf2,
                                       flush_reason="FLUSH_REASON1")
     event2 = entry_to_event(event2_entry, cf_names)
     assert events_mngr.try_adding_entry(event2_entry) == (True, event2, cf2)
@@ -477,7 +487,7 @@ def test_adding_events_to_events_mngr():
 
     # Create another cf1 event, but set its time to EARLIER than event1
     event3_entry = create_event_entry(job_id1, "2022/03/17-14:42:19.220573",
-                                      EventType.FLUSH_FINISHED, cf1)
+                                      events.EventType.FLUSH_FINISHED, cf1)
     event3 = entry_to_event(event3_entry, cf_names)
     assert events_mngr.try_adding_entry(event3_entry) == (True, event3, cf1)
     # Expecting event3 to be before event1
@@ -485,16 +495,19 @@ def test_adding_events_to_events_mngr():
     verify_expected_events(events_mngr, expected_events_entries)
 
     # Create some more cf21 event, later in time
-    event4_entry = create_event_entry(job_id2, "2022/05/17-14:42:19.220573",
-                                      EventType.COMPACTION_STARTED, cf2,
-                                      compaction_reason="Reason1")
+    event4_entry = \
+        create_event_entry(job_id2, "2022/05/17-14:42:19.220573",
+                           events.EventType.COMPACTION_STARTED, cf2,
+                           compaction_reason="Reason1")
     event4 = entry_to_event(event4_entry, cf_names)
-    event5_entry = create_event_entry(job_id2, "2022/05/17-15:42:19.220573",
-                                      EventType.COMPACTION_STARTED, cf2,
-                                      compaction_reason="Reason2")
+    event5_entry = \
+        create_event_entry(job_id2, "2022/05/17-15:42:19.220573",
+                           events.EventType.COMPACTION_STARTED, cf2,
+                           compaction_reason="Reason2")
     event5 = entry_to_event(event5_entry, cf_names)
-    event6_entry = create_event_entry(job_id2, "2022/05/17-16:42:19.220573",
-                                      EventType.COMPACTION_FINISHED, cf2)
+    event6_entry =\
+        create_event_entry(job_id2, "2022/05/17-16:42:19.220573",
+                           events.EventType.COMPACTION_FINISHED, cf2)
     event6 = entry_to_event(event6_entry, cf_names)
     assert events_mngr.try_adding_entry(event4_entry) == (True, event4, cf2)
     assert events_mngr.try_adding_entry(event5_entry) == (True, event5, cf2)
@@ -510,42 +523,45 @@ def test_get_flow_events():
     cf_names = [cf1, cf2]
     job_id = 1
     job_id_to_cf_name_map = {job_id: cf1}
-    events_mngr = EventsMngr(job_id_to_cf_name_map, cf_names)
+    events_mngr = events.EventsMngr(job_id_to_cf_name_map, cf_names)
 
-    assert events_mngr.get_cf_flow_events(FlowType.FLUSH, cf1) == []
-    assert events_mngr.get_cf_flow_events(FlowType.FLUSH, cf2) == []
-    assert events_mngr.get_all_flow_events(FlowType.FLUSH) == []
+    assert events_mngr.get_cf_flow_events(events.FlowType.FLUSH, cf1) == []
+    assert events_mngr.get_cf_flow_events(events.FlowType.FLUSH, cf2) == []
+    assert events_mngr.get_all_flow_events(events.FlowType.FLUSH) == []
 
     flush_started_cf1_1 = create_event_entry(job_id,
                                              "2022/04/18-14:42:19.220573",
-                                             EventType.FLUSH_STARTED, cf1,
+                                             events.EventType.FLUSH_STARTED,
+                                             cf1,
                                              flush_reason="FLUSH_REASON1")
     flush_started_event = entry_to_event(flush_started_cf1_1, cf_names)
     assert events_mngr.try_adding_entry(flush_started_cf1_1) == \
            (True, flush_started_event, cf1)
     cf1_flush_started_events =\
-        events_mngr.get_cf_events_by_type(cf1, EventType.FLUSH_STARTED)
+        events_mngr.get_cf_events_by_type(cf1, events.EventType.FLUSH_STARTED)
 
     expected_flush_events = [(cf1_flush_started_events[0], None)]
-    assert events_mngr.get_cf_flow_events(FlowType.FLUSH, cf1) == \
+    assert events_mngr.get_cf_flow_events(events.FlowType.FLUSH, cf1) == \
            expected_flush_events
-    assert events_mngr.get_all_flow_events(FlowType.FLUSH) == \
+    assert events_mngr.get_all_flow_events(events.FlowType.FLUSH) == \
            expected_flush_events
 
-    flush_finished_cf1_1 = create_event_entry(job_id,
-                                              "2022/04/18-14:43:19.220573",
-                                              EventType.FLUSH_FINISHED, cf1)
+    flush_finished_cf1_1 = \
+        create_event_entry(job_id,
+                           "2022/04/18-14:43:19.220573",
+                           events.EventType.FLUSH_FINISHED,
+                           cf1)
     flush_finished_event = entry_to_event(flush_finished_cf1_1, cf_names)
     assert events_mngr.try_adding_entry(flush_finished_cf1_1) == \
            (True, flush_finished_event, cf1)
     cf1_flush_started_events =\
-        events_mngr.get_cf_events_by_type(cf1, EventType.FLUSH_STARTED)
+        events_mngr.get_cf_events_by_type(cf1, events.EventType.FLUSH_STARTED)
     cf1_flush_finished_events =\
-        events_mngr.get_cf_events_by_type(cf1, EventType.FLUSH_FINISHED)
+        events_mngr.get_cf_events_by_type(cf1, events.EventType.FLUSH_FINISHED)
 
     expected_flush_events = [(cf1_flush_started_events[0],
                               cf1_flush_finished_events[0])]
-    assert events_mngr.get_all_flow_events(FlowType.FLUSH) == \
+    assert events_mngr.get_all_flow_events(events.FlowType.FLUSH) == \
            expected_flush_events
 
 
@@ -555,20 +571,22 @@ def test_try_adding_invalid_event_to_events_mngr():
     cf_names = [cf1, cf2]
     job_id = 35
     job_id_to_cf_name_map = {job_id: cf1}
-    events_mngr = EventsMngr(job_id_to_cf_name_map, cf_names)
+    events_mngr = events.EventsMngr(job_id_to_cf_name_map, cf_names)
 
     # Illegal event json
-    invalid_event_entry = create_event_entry(job_id,
-                                             "2022/04/17-14:42:19.220573",
-                                             EventType.FLUSH_FINISHED, cf1,
-                                             make_illegal_json=True)
+    invalid_event_entry =\
+        create_event_entry(job_id,
+                           "2022/04/17-14:42:19.220573",
+                           events.EventType.FLUSH_FINISHED,
+                           cf1,
+                           make_illegal_json=True)
 
     assert events_mngr.try_adding_entry(invalid_event_entry) == \
            (True, None, None)
     assert events_mngr.debug_get_all_events() == {}
 
     event1_entry = create_event_entry(job_id, "2022/04/17-14:42:19.220573",
-                                      EventType.FLUSH_FINISHED, cf1)
+                                      events.EventType.FLUSH_FINISHED, cf1)
     event1 = entry_to_event(event1_entry, cf_names)
     assert events_mngr.try_adding_entry(event1_entry) == (True, event1, cf1)
     assert len(events_mngr.debug_get_all_events()) == 1

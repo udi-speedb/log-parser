@@ -19,11 +19,11 @@ from dataclasses import dataclass, asdict
 import baseline_log_files_utils
 import cache_utils
 import calc_utils
-import database_options
+import db_options
 import db_files
 import utils
-from database_options import DatabaseOptions, CfsOptionsDiff, SectionType
-from database_options import SanitizedValueType
+from db_options import DatabaseOptions, CfsOptionsDiff, SectionType
+from db_options import SanitizedValueType
 from stats_mngr import CompactionStatsMngr
 from warnings_mngr import WarningType, WarningElementInfo, WarningsMngr
 
@@ -129,16 +129,26 @@ def prepare_error_or_fatal_warnings_for_display(warnings_mngr, prepare_error):
 
 
 def prepare_db_wide_info_for_display(parsed_log):
+    log_file_time_info = calc_utils.get_log_file_time_info(parsed_log)
+    assert isinstance(log_file_time_info, calc_utils.LogFileTimeInfo)
+
     display_info = {}
 
     db_wide_info = calc_utils.get_db_wide_info(parsed_log)
     db_wide_notable_entities = \
         get_db_wide_notable_entities_display_info(parsed_log)
     display_info["Name"] = parsed_log.get_log_file_path()
+    display_info["Start Time"] = log_file_time_info.start_time
+    display_info["End Time"] = log_file_time_info.end_time
+    display_info["Log Time Span"] = f"{log_file_time_info.span_seconds:.1f} " \
+                                    f"seconds   "
     display_info["Creator"] = db_wide_info['creator']
     display_info["Version"] = f"{db_wide_info['version']} " \
                               f"[{db_wide_info['git_hash']}]"
-    display_info["DB Size"] = \
+
+    db_size_bytes_time = db_wide_info['db_size_bytes_time']
+    db_size_key = f"DB Size (At: {db_size_bytes_time})"
+    display_info[db_size_key] = \
         num_bytes_for_display(db_wide_info['db_size_bytes'])
     display_info["Num Keys Written"] = \
         num_for_display(db_wide_info['num_keys_written'])
@@ -284,7 +294,7 @@ def prepare_db_wide_diff_dict_for_display(product_name, baseline_version,
     for full_option_name in db_wide_diff:
         section_type = SectionType.extract_section_type(full_option_name)
         option_name = \
-            database_options.extract_option_name(full_option_name)
+            db_options.extract_option_name(full_option_name)
 
         if section_type == SectionType.DB_WIDE:
             display_db_wide_diff["DB"][option_name] = \

@@ -1,4 +1,4 @@
-from counters import CountersAndHistogramsMngr
+import counters
 from log_entry import LogEntry
 from test.testing_utils import \
     add_stats_entry_lines_to_counters_and_histograms_mngr
@@ -16,7 +16,7 @@ def test_stats_counter_and_histograms_is_your_entry():
     entry = LogEntry(0, lines[0])
     entry.add_line(lines[1], True)
 
-    assert CountersAndHistogramsMngr.is_your_entry(entry)
+    assert counters.CountersAndHistogramsMngr.is_your_entry(entry)
 
 
 def test_counters_and_histograms_mngr():
@@ -30,7 +30,7 @@ def test_counters_and_histograms_mngr():
         rocksdb.read.block.compaction.micros P50 : 1.321429 P95 : 3.650000 P99 : 17.000000 P100 : 17.000000 COUNT : 67 SUM : 140
         rocksdb.blobdb.next.micros P50 : 0.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0'''.splitlines()  # noqa
 
-    mngr = CountersAndHistogramsMngr()
+    mngr = counters.CountersAndHistogramsMngr()
     assert mngr.get_counters_names() == []
     assert mngr.get_counters_times() == []
     assert mngr.get_histogram_counters_names() == []
@@ -215,7 +215,7 @@ def test_counters_zero_handling():
         counter1 COUNT : 0'''.splitlines()
     ]
 
-    mngr = CountersAndHistogramsMngr()
+    mngr = counters.CountersAndHistogramsMngr()
 
     assert mngr.get_non_zeroes_counter_entries("counter1") == []
     assert mngr.are_all_counter_entries_zero("counter1")
@@ -277,7 +277,7 @@ def test_histograms_zero_handling():
         counter1 P50 : 1.000000 P95 : 0.000000 P99 : 0.000000 P100 : 0.000000 COUNT : 0 SUM : 0'''.splitlines() # noqa
     ]
 
-    mngr = CountersAndHistogramsMngr()
+    mngr = counters.CountersAndHistogramsMngr()
 
     assert mngr.get_non_zeroes_histogram_entries("counter1") == []
     assert mngr.are_all_histogram_entries_zero("counter1")
@@ -405,7 +405,7 @@ def test_badly_formed_counters_and_histograms_entries():
     for line in entry_lines[1:]:
         entry.add_line(line)
 
-    mngr = CountersAndHistogramsMngr()
+    mngr = counters.CountersAndHistogramsMngr()
     mngr.add_entry(entry.all_lines_added())
 
     assert mngr.get_all_counters_entries() == \

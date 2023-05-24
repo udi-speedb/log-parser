@@ -20,7 +20,7 @@ import utils
 from cfs_infos import CfsMetadata
 from compactions import CompactionsMonitor
 from counters import CountersAndHistogramsMngr
-from database_options import DatabaseOptions
+from db_options import DatabaseOptions
 from db_files import DbFilesMonitor
 from events import EventsMngr
 from log_entry import LogEntry
@@ -466,10 +466,24 @@ class ParsedLog:
     def update_my_entities_on_new_cf(self, cf_name):
         self.events_mngr.add_cf_name(cf_name)
 
+    def get_start_time(self):
+        return self.metadata.get_start_time()
+
     def set_end_time(self):
         last_entry = self.log_entries[-1]
         end_time = last_entry.get_time()
         self.metadata.set_end_time(end_time)
+
+    def get_num_seconds_from_start(self, time_str):
+        num_seconds =\
+            utils.get_times_strs_diff_seconds(
+                self.get_start_time(), time_str)
+        if num_seconds < 0:
+            logging.warning(
+                f"time ({time_str}) is before log start\n{self.metadata}")
+            return 0
+
+        return num_seconds
 
     def get_log_file_path(self):
         return self.log_file_path

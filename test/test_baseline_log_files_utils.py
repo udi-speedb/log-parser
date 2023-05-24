@@ -13,8 +13,8 @@
 # limitations under the License.'''
 
 import baseline_log_files_utils as baseline_utils
+import db_options
 import utils
-from database_options import SANITIZED_NO_VALUE
 
 Ver = baseline_utils.Version
 baseline_logs_folder_path = "../" + utils.BASELINE_LOGS_FOLDER
@@ -165,7 +165,7 @@ def test_find_options_diff():
                                                       "NEW_DB_WIDE_VALUE1",
                                                       True)
     expected_diff['DBOptions.NEW_DB_WIDE_OPTION1'] = \
-        {utils.NO_CF: (SANITIZED_NO_VALUE, "NEW_DB_WIDE_VALUE1")}
+        {utils.NO_CF: (db_options.SANITIZED_NO_VALUE, "NEW_DB_WIDE_VALUE1")}
 
     cf_name = "default"
 
@@ -182,7 +182,7 @@ def test_find_options_diff():
     updated_database_options_2_1_0.set_cf_option(cf_name, "NEW_CF_OPTION1",
                                                  "NEW_CF_VALUE1", "True")
     expected_diff['CFOptions.NEW_CF_OPTION1'] =\
-        {'default': (SANITIZED_NO_VALUE, "NEW_CF_VALUE1")}
+        {'default': (db_options.SANITIZED_NO_VALUE, "NEW_CF_VALUE1")}
 
     curr_block_align_value = \
         updated_database_options_2_1_0.get_cf_table_option(cf_name,
@@ -198,7 +198,7 @@ def test_find_options_diff():
                                                        "NEW_CF_TABLE_VALUE1",
                                                        "True")
     expected_diff['TableOptions.BlockBasedTable.NEW_CF_TABLE_OPTION1'] = \
-        {'default': (SANITIZED_NO_VALUE, "NEW_CF_TABLE_VALUE1")}
+        {'default': (db_options.SANITIZED_NO_VALUE, "NEW_CF_TABLE_VALUE1")}
 
     options_diff_speedb_2_1_0_vs_itself, closest_version =\
         baseline_utils.find_options_diff_relative_to_baseline(

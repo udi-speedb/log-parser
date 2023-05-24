@@ -736,6 +736,9 @@ class DatabaseOptions:
 
     def get_cf_table_raw_ptr_str(self, cf_name, options_name):
         sanitized_ptr = self.get_cf_table_option(cf_name, options_name)
+        if sanitized_ptr is None:
+            return None
+
         return sanitized_to_raw_ptr_value(sanitized_ptr)
 
     def set_cf_table_option(self, cf_name, option_name, option_value,

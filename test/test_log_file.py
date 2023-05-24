@@ -18,7 +18,7 @@ import pytest
 
 import test.testing_utils as test_utils
 import utils
-from database_options import DatabaseOptions
+from db_options import DatabaseOptions
 from log_file import LogFileMetadata, ParsedLog
 from test.sample_log_info import SampleLogInfo, SampleRolledLogInfo
 

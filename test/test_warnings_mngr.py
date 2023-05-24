@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.'''
 
+import utils
 from log_entry import LogEntry
-from utils import NO_CF, WarningType
 from warnings_mngr import WarningCategory, WarningElementInfo, WarningsMngr
 
 
 def create_warning_entry(warning_type, cf_name, warning_element_info):
-    assert isinstance(warning_type, WarningType)
+    assert isinstance(warning_type, utils.WarningType)
     assert isinstance(warning_element_info, WarningElementInfo)
 
     warning_line = warning_element_info.time + " "
@@ -27,7 +27,7 @@ def create_warning_entry(warning_type, cf_name, warning_element_info):
     warning_line += f'[{warning_type.name}] '
     warning_line += f'[{warning_element_info.code_pos}] '
 
-    if cf_name != NO_CF:
+    if cf_name != utils.NO_CF:
         warning_line += f'[{cf_name}] '
     warning_line += warning_element_info.warning_msg
 
@@ -40,7 +40,7 @@ def create_warning_entry(warning_type, cf_name, warning_element_info):
 
 
 def add_warning(mngr, warning_type, time, code_pos, cf_name, warn_msg):
-    assert isinstance(warning_type, WarningType)
+    assert isinstance(warning_type, utils.WarningType)
 
     warning_element_info = WarningElementInfo(time, code_pos, warn_msg)
     warn_entry = create_warning_entry(
@@ -104,11 +104,12 @@ def test_warn_entries_basic():
     code_pos4 = "/column_family2.cc:1111"
 
     mngr = WarningsMngr()
-    add_warning(mngr, WarningType.WARN, time1, code_pos1, cf1, warn_msg1)
-    add_warning(mngr, WarningType.ERROR, time2, code_pos1, cf2, warn_msg2)
-    add_warning(mngr, WarningType.WARN, time3, code_pos2, cf2, warn_msg3)
-    add_warning(mngr, WarningType.WARN, time4, code_pos3, cf2, delay_msg)
-    add_warning(mngr, WarningType.WARN, time5, code_pos4, cf1, stop_msg)
+    add_warning(mngr, utils.WarningType.WARN, time1, code_pos1, cf1, warn_msg1)
+    add_warning(mngr, utils.WarningType.ERROR, time2,
+                code_pos1, cf2, warn_msg2)
+    add_warning(mngr, utils.WarningType.WARN, time3, code_pos2, cf2, warn_msg3)
+    add_warning(mngr, utils.WarningType.WARN, time4, code_pos3, cf2, delay_msg)
+    add_warning(mngr, utils.WarningType.WARN, time5, code_pos4, cf1, stop_msg)
     mngr.set_cfs_names_on_parsing_complete(cfs_names)
 
     expected_cf1_warn_warnings = {
@@ -134,8 +135,8 @@ def test_warn_entries_basic():
     expected_error_warnings = {cf2: expected_cf2_error_warnings}
 
     all_expected_warnings = {
-        WarningType.WARN: expected_warn_warnings,
-        WarningType.ERROR: expected_error_warnings
+        utils.WarningType.WARN: expected_warn_warnings,
+        utils.WarningType.ERROR: expected_error_warnings
     }
 
     actual_cf1_warn_warnings = mngr.get_cf_warn_warnings(cf1)

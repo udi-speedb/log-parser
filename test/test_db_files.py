@@ -1,7 +1,7 @@
 import copy
 
-from db_files import DbFileInfo, DbFilesMonitor
-from events import EventType
+import db_files
+import events
 from test.testing_utils import create_event
 
 job_id1 = 1
@@ -19,7 +19,7 @@ time1_plus_11_sec = "2023/01/24-08:55:50.130553"
 file_number1 = 1234
 file_number2 = 5678
 file_number3 = 9999
-compressed_data_size_bytes = 62396458
+cmprsd_data_size_bytes = 62396458
 num_data_blocks = 1000
 total_keys_sizes_bytes = 2000
 total_values_sizes_bytes = 3333
@@ -31,7 +31,7 @@ num_filter_entries = 6666
 compression_type = "NoCompression"
 
 table_properties = {
-    "data_size": compressed_data_size_bytes,
+    "data_size": cmprsd_data_size_bytes,
     "index_size": index_size,
     "index_partitions": 0,
     "top_level_index_size": 0,
@@ -69,31 +69,32 @@ table_properties = {
 
 def test_create_delete_file():
     creation_event1 = create_event(job_id1, cf_names, time1,
-                                   EventType.TABLE_FILE_CREATION, cf1,
+                                   events.EventType.TABLE_FILE_CREATION, cf1,
                                    file_number=file_number1,
                                    table_properties=table_properties)
 
-    monitor = DbFilesMonitor()
+    monitor = db_files.DbFilesMonitor()
     assert monitor.get_all_live_files() == {}
     assert monitor.get_cf_live_files(cf1) == []
 
     expected_data_size_bytes = \
         total_keys_sizes_bytes + total_values_sizes_bytes
 
-    info1 = DbFileInfo(file_number=file_number1,
-                       cf_name=cf1,
-                       creation_time=time1,
-                       deletion_time=None,
-                       size_bytes=0,
-                       compressed_size_bytes=0,
-                       compressed_data_size_bytes=compressed_data_size_bytes,
-                       data_size_bytes=expected_data_size_bytes,
-                       index_size_bytes=index_size,
-                       filter_size_bytes=filter_size,
-                       filter_policy=filter_policy,
-                       num_filter_entries=num_filter_entries,
-                       compression_type=compression_type,
-                       level=None)
+    info1 = \
+        db_files.DbFileInfo(file_number=file_number1,
+                            cf_name=cf1,
+                            creation_time=time1,
+                            deletion_time=None,
+                            size_bytes=0,
+                            compressed_size_bytes=0,
+                            compressed_data_size_bytes=cmprsd_data_size_bytes,
+                            data_size_bytes=expected_data_size_bytes,
+                            index_size_bytes=index_size,
+                            filter_size_bytes=filter_size,
+                            filter_policy=filter_policy,
+                            num_filter_entries=num_filter_entries,
+                            compression_type=compression_type,
+                            level=None)
 
     assert monitor.new_event(creation_event1)
     assert monitor.get_all_files() == {cf1: [info1]}
@@ -104,7 +105,7 @@ def test_create_delete_file():
     assert monitor.get_cf_live_files(cf2) == []
 
     deletion_event = create_event(job_id1, cf_names, time1_plus_10_sec,
-                                  EventType.TABLE_FILE_DELETION, cf1,
+                                  events.EventType.TABLE_FILE_DELETION, cf1,
                                   file_number=file_number1)
     assert monitor.new_event(deletion_event)
     info1.deletion_time = time1_plus_10_sec
@@ -116,7 +117,7 @@ def test_create_delete_file():
     assert monitor.get_cf_live_files(cf2) == []
 
     creation_event2 = create_event(job_id1, cf_names, time1_plus_10_sec,
-                                   EventType.TABLE_FILE_CREATION, cf1,
+                                   events.EventType.TABLE_FILE_CREATION, cf1,
                                    file_number=file_number2,
                                    table_properties=table_properties)
     info2 = copy.deepcopy(info1)
@@ -133,7 +134,7 @@ def test_create_delete_file():
     assert monitor.get_cf_live_files(cf1) == [info2]
 
     creation_event3 = create_event(job_id1, cf_names, time1_plus_10_sec,
-                                   EventType.TABLE_FILE_CREATION, cf2,
+                                   events.EventType.TABLE_FILE_CREATION, cf2,
                                    file_number=file_number3,
                                    table_properties=table_properties)
     info3 = copy.deepcopy(info1)
