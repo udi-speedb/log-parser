@@ -56,7 +56,7 @@ def print_cf_console_printout(f, parsed_log):
         cfs_display_values.append(row)
 
     table_header = ["Column Family",
-                    "Size",
+                    "Size (*)",
                     "Avg. Key Size",
                     "Avg. Value Size",
                     "Compaction Style",
@@ -82,7 +82,7 @@ def print_general_info(f, parsed_log: ParsedLog):
         print(f"{field_name.ljust(width)}: {value}", file=f)
     print_cf_console_printout(f, parsed_log)
 
-    print(f"(*) DB Size Time is calculated at: {db_size_time}", file=f)
+    print(f"(*) DB / CF-s Size Time is calculated at: {db_size_time}", file=f)
 
 
 def get_console_output(log_file_path, parsed_log, output_type):
