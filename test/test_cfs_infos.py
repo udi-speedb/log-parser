@@ -12,10 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.'''
 
-import pytest
-
 import test.testing_utils as test_utils
-import utils
 from cfs_infos import CfMetadata, CfsMetadata
 
 default = "default"
@@ -161,9 +158,10 @@ def test_handle_cf_name_found_during_parsing():
 def test_parse_cf_recovered_entry():
     cfs = CfsMetadata("dummy-path")
 
-    with pytest.raises(utils.ParsingError):
-        cfs.try_parse_as_cf_lifetime_entries([cf1_recovered_entry],
-                                             entry_idx=0)
+    assert cfs.try_parse_as_cf_lifetime_entries(
+        [cf1_recovered_entry], entry_idx=0) == (True, 1)
+    cfs.get_cf_id(cf1) is None
+
     cfs.add_cf_found_during_cf_options_parsing(cf1, cf_id=None,
                                                is_auto_generated=False,
                                                entry=cf1_recovered_entry)
@@ -176,9 +174,10 @@ def test_parse_cf_recovered_entry():
 def test_parse_cf_created_entry():
     cfs = CfsMetadata("dummy-path")
 
-    with pytest.raises(utils.ParsingError):
-        cfs.try_parse_as_cf_lifetime_entries([cf1_created_entry],
-                                             entry_idx=0)
+    cfs.try_parse_as_cf_lifetime_entries(
+        [cf1_created_entry], entry_idx=0) == (True, 1)
+    cfs.get_cf_id(cf1) is None
+
     cfs.add_cf_found_during_cf_options_parsing(cf1, cf_id=None,
                                                is_auto_generated=False,
                                                entry=cf1_recovered_entry)
@@ -209,7 +208,7 @@ def test_parse_cf_dropped_entry():
     assert cfs.was_cf_dropped(cf1)
     assert cfs.get_cf_drop_time(cf1) == cf1_drop_time
 
-    # Illegal to drop twice
-    with pytest.raises(utils.ParsingError):
-        assert cfs.try_parse_as_cf_lifetime_entries([cf1_dropped_entry],
-                                                    entry_idx=0) == (True, 1)
+    assert cfs.try_parse_as_cf_lifetime_entries(
+        [cf1_dropped_entry], entry_idx=0) == (True, 1)
+    assert cfs.was_cf_dropped(cf1)
+    assert cfs.get_cf_drop_time(cf1) == cf1_drop_time

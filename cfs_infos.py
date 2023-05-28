@@ -73,16 +73,23 @@ class CfsMetadata:
         entry = log_entries[entry_idx]
         next_entry_idx = entry_idx + 1
 
-        # The cf lifetime entries are printed when the CF will have been
-        # discovered
-        if self.try_parse_as_drop_cf(entry):
-            return True, next_entry_idx
-        if self.try_parse_as_recover_cf(entry):
-            return True, next_entry_idx
-        if self.try_parse_as_create_cf(entry):
-            return True, next_entry_idx
+        try:
+            # The cf lifetime entries are printed when the CF will have been
+            # discovered
+            if self.try_parse_as_drop_cf(entry):
+                return True, next_entry_idx
+            if self.try_parse_as_recover_cf(entry):
+                return True, next_entry_idx
+            if self.try_parse_as_create_cf(entry):
+                return True, next_entry_idx
 
-        return None, entry_idx
+            return None, entry_idx
+
+        except utils.ParsingError as e:
+            logging.error(
+                f"Failed parsing entry as cf lifetime entry ({e}).\n "
+                f"entry:{entry}")
+            return True, next_entry_idx
 
     def try_parse_as_drop_cf(self, entry):
         cf_id_match = re.findall(regexes.DROP_CF, entry.get_msg())

@@ -291,7 +291,7 @@ def main():
         print_to_console_if_applicable(cmdline_args, log_file_path, parsed_log,
                                        json_content)
     except utils.ParsingError as exception:
-        report_exception(exception, console=False)
+        report_exception(exception, console=True)
     except utils.LogFileNotFoundError as exception:
         report_exception(exception, console=True)
     except utils.EmptyLogFile as exception:
@@ -304,6 +304,7 @@ def main():
         if not DEBUG_MODE:
             fatal_exception(exception)
         else:
+            exit_event.set()
             raise
     except Exception as exception:  # noqa
         if not DEBUG_MODE:
@@ -313,6 +314,7 @@ def main():
                   file=sys.stderr)
             fatal_exception(exception)
         else:
+            exit_event.set()
             raise
 
 

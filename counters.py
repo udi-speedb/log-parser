@@ -29,7 +29,11 @@ class CountersAndHistogramsMngr:
         if not CountersAndHistogramsMngr.is_your_entry(entry):
             return False, entry_idx
 
-        self.add_entry(entry)
+        try:
+            self.add_entry(entry)
+        except utils.ParsingError:
+            logging.error(f"Error while parsing Counters entry, Skipping.\n"
+                          f"entry:{entry}")
         entry_idx += 1
 
         return True, entry_idx

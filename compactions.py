@@ -194,6 +194,13 @@ class CompactionsMonitor:
         assert isinstance(event, events.CompactionFinishedEvent)
 
         job_id = event.get_job_id()
+        if job_id not in self.jobs:
+            logging.info(
+                f"Compaction finished event for job for which there is no "
+                f"recorded compaction started. job-id:{job_id}\n"
+                f"event:{event}")
+            return
+
         job = self.jobs[job_id]
         job.set_finish_event(event)
 

@@ -20,8 +20,8 @@ import utils
 from cfs_infos import CfsMetadata
 from compactions import CompactionsMonitor
 from counters import CountersAndHistogramsMngr
-from db_options import DatabaseOptions
 from db_files import DbFilesMonitor
+from db_options import DatabaseOptions
 from events import EventsMngr
 from log_entry import LogEntry
 from log_file_options_parser import LogFileOptionsParser
@@ -416,7 +416,7 @@ class ParsedLog:
 
         return result
 
-    def try_parse_as_counters_and_histograms_stats_entries(self):
+    def try_parse_as_counters_stats_entries(self):
         result, self.entry_idx = \
             self.counters_and_histograms_mngr.try_adding_entries(
                 self.log_entries, self.entry_idx)
@@ -427,31 +427,41 @@ class ParsedLog:
         # Parse all the entries and process those that are required
         try:
             while self.entry_idx < len(self.log_entries):
-                if self.try_parse_as_cf_lifetime_entry():
-                    continue
+                curr_entry_idx = self.entry_idx
+                try:
+                    if self.try_parse_as_cf_lifetime_entry():
+                        continue
 
-                if self.try_parse_as_db_wide_options():
-                    continue
+                    if self.try_parse_as_db_wide_options():
+                        continue
 
-                if self.try_parse_as_cf_options():
-                    continue
+                    if self.try_parse_as_cf_options():
+                        continue
 
-                if self.try_parse_as_warning_entries():
-                    continue
+                    if self.try_parse_as_warning_entries():
+                        continue
 
-                if self.try_parse_as_event_entries():
-                    continue
+                    if self.try_parse_as_event_entries():
+                        continue
 
-                if self.try_parse_as_stats_entries():
-                    continue
+                    if self.try_parse_as_stats_entries():
+                        continue
 
-                if self.try_parse_as_counters_and_histograms_stats_entries():
-                    continue
+                    if self.try_parse_as_counters_stats_entries():
+                        continue
 
-                if not self.compactions_monitor.consider_entry(
-                        self.get_curr_entry()):
-                    self.not_parsed_entries.append(self.get_curr_entry())
-                self.entry_idx += 1
+                    if not self.compactions_monitor.consider_entry(
+                            self.get_curr_entry()):
+                        self.not_parsed_entries.append(self.get_curr_entry())
+
+                    self.entry_idx += 1
+
+                except utils.ParsingError:
+                    logging.error("Error while parsing, skipping.")
+
+                    # Make sure we are not stuck forever
+                    if curr_entry_idx == self.entry_idx:
+                        self.entry_idx += 1
 
         except AssertionError:
             logging.error(f"Assertion While Parsing {self.log_file_path}")

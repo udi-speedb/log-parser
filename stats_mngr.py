@@ -364,12 +364,26 @@ class CompactionStatsMngr:
                     CompactionStatsMngr.parse_size_field(size_in_units,
                                                          size_units)
             }
+            # A valid line must have one more field than in the header line
+            if len(line_fields) != len(header_fields) + 1:
+                logging.error(
+                    f"Expected #{len(header_fields)+1} fields in line, "
+                    f"when there are {len(line_fields)} in compaction level "
+                    f"stats. time:{time}, cf:{cf_name}.\n"
+                    f"line:{line}")
+                return
+
             new_entry[key].update({
                 header_fields[i]: line_fields[i+1]
                 for i in range(3, len(header_fields))
             })
 
-        assert CompactionStatsMngr.LineType.SUM.name in new_entry
+        if CompactionStatsMngr.LineType.SUM.name not in new_entry:
+            logging.error(
+                f"Error parsing compaction stats level lines. "
+                f"time:{time}, cf:{cf_name}.\n"
+                f"stats lines:{stats_lines}")
+            return
 
         if time not in self.level_entries:
             self.level_entries[time] = {}
@@ -836,7 +850,10 @@ class BlockCacheStatsMngr:
         self.caches = dict()
 
     def add_lines(self, time, cf_name, db_stats_lines):
-        assert len(db_stats_lines) >= 2
+        if len(db_stats_lines) < 2:
+            logging.error("XXXXXXXXXXXXXXXXXXXXXXXXXXXx")
+            return
+
         cache_id = self.parse_cache_id_line(db_stats_lines[0])
         self.parse_global_entry_stats_line(time, cache_id, db_stats_lines[1])
         if len(db_stats_lines) > 2:
