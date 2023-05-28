@@ -71,10 +71,18 @@ def print_general_info(f, parsed_log: ParsedLog):
     display_general_info_dict = \
         display_utils.prepare_db_wide_info_for_display(parsed_log)
 
+    display_general_info_dict = \
+        utils.replace_key_keep_order(
+            display_general_info_dict, "DB Size", "DB Size (*)")
+    db_size_time = display_general_info_dict["DB Size Time"]
+    del display_general_info_dict["DB Size Time"]
+
     width = 25
     for field_name, value in display_general_info_dict.items():
         print(f"{field_name.ljust(width)}: {value}", file=f)
     print_cf_console_printout(f, parsed_log)
+
+    print(f"(*) DB Size Time is calculated at: {db_size_time}", file=f)
 
 
 def get_console_output(log_file_path, parsed_log, output_type):

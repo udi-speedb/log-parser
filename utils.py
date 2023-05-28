@@ -110,6 +110,21 @@ def unify_dicts(dict1, dict2, favor_first):
     return unified_dict
 
 
+def replace_key_keep_order(d, existing_key, new_key):
+    if existing_key not in d:
+        return
+
+    pos = list(d.keys()).index(existing_key)
+    value = d[existing_key]
+
+    items = list(d.items())
+    items.insert(pos, (new_key, value))
+    updated_d = dict(items)
+    del(updated_d[existing_key])
+
+    return updated_d
+
+
 def has_method(obj, method_name):
     """ Checks if a method exists in an obj """
     return method_name in dir(obj)

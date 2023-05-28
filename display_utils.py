@@ -19,8 +19,8 @@ from dataclasses import dataclass, asdict
 import baseline_log_files_utils
 import cache_utils
 import calc_utils
-import db_options
 import db_files
+import db_options
 import utils
 from db_options import DatabaseOptions, CfsOptionsDiff, SectionType
 from db_options import SanitizedValueType
@@ -147,9 +147,9 @@ def prepare_db_wide_info_for_display(parsed_log):
                               f"[{db_wide_info['git_hash']}]"
 
     db_size_bytes_time = db_wide_info['db_size_bytes_time']
-    db_size_key = f"DB Size (At: {db_size_bytes_time})"
-    display_info[db_size_key] = \
+    display_info["DB Size"] = \
         num_bytes_for_display(db_wide_info['db_size_bytes'])
+    display_info["DB Size Time"] = db_size_bytes_time
     display_info["Num Keys Written"] = \
         num_for_display(db_wide_info['num_keys_written'])
     display_info["Avg. Written Key Size"] = \
