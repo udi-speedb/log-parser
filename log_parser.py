@@ -70,7 +70,8 @@ def parse_log(log_file_path):
         log_lines = log_file.readlines()
         logging.debug(f"Completed reading the contents of {log_file_path}")
 
-        return ParsedLog(log_file_path, log_lines)
+        return ParsedLog(log_file_path, log_lines,
+                         should_init_baseline_info=True)
 
 
 def setup_cmd_line_parser():
@@ -121,7 +122,10 @@ def validate_and_sanitize_cmd_line_args(cmdline_args):
 def handle_exception(exception, console, should_exit):
     logging.exception(f"\n{exception}")
     if console:
-        print(exception.msg, file=sys.stderr)
+        if hasattr(exception, 'msg'):
+            print(exception.msg, file=sys.stderr)
+        else:
+            print(exception, file=sys.stderr)
     if should_exit:
         exit_program(1)
 
@@ -286,6 +290,18 @@ def main():
             report_to_console = False
         else:
             report_to_console = True
+
+        if report_to_console:
+            log_file_path_str = parsed_log.get_log_file_path()
+            print(f"Log file: {str(Path(log_file_path_str).as_uri())}")
+
+            baseline_info = parsed_log.get_baseline_info()
+            if baseline_info is not None:
+                print(f"Baseline Log: "
+                      f"{str(baseline_info.baseline_log_path.as_uri())}")
+            else:
+                print("No Available Baseline Log")
+
         csvs_paths = generate_csvs_if_applicable(parsed_log, output_folder,
                                                  report_to_console)
         json_content = generate_json_if_applicable(

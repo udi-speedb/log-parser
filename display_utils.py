@@ -15,12 +15,14 @@
 import io
 import logging
 from dataclasses import dataclass, asdict
+from pathlib import Path
 
 import baseline_log_files_utils
 import cache_utils
 import calc_utils
 import db_files
 import db_options
+import log_file
 import utils
 from db_options import DatabaseOptions, CfsOptionsDiff, SectionType
 from db_options import SanitizedValueType
@@ -137,7 +139,7 @@ def prepare_db_wide_info_for_display(parsed_log):
     db_wide_info = calc_utils.get_db_wide_info(parsed_log)
     db_wide_notable_entities = \
         get_db_wide_notable_entities_display_info(parsed_log)
-    display_info["Name"] = parsed_log.get_log_file_path()
+    display_info["Name"] = str(Path(parsed_log.get_log_file_path()))
     display_info["Start Time"] = log_file_time_info.start_time
     display_info["End Time"] = log_file_time_info.end_time
     display_info["Log Time Span"] = f"{log_file_time_info.span_seconds:.1f} " \
@@ -286,10 +288,12 @@ def get_diff_tuple_for_display(raw_diff_tuple):
             utils.DIFF_LOG_NAME: raw_diff_tuple[1]}
 
 
-def prepare_db_wide_diff_dict_for_display(product_name, baseline_version,
-                                          db_wide_diff):
-    display_db_wide_diff = {"Baseline":
-                            f"{str(baseline_version)} ({product_name})"}
+def prepare_db_wide_diff_dict_for_display(
+        product_name, baseline_log_path, baseline_version, db_wide_diff):
+    display_db_wide_diff = {
+        "Baseline": f"{str(baseline_version)} ({product_name})",
+        "Baseline Log": str(baseline_log_path)
+    }
 
     if db_wide_diff is None:
         display_db_wide_diff["DB"] = "No Diff"
@@ -362,20 +366,19 @@ def prepare_cfs_diff_dict_for_display(baseline_opts, log_opts, cfs_names):
 
 
 def get_options_baseline_diff_for_display(parsed_log):
+    assert isinstance(parsed_log, log_file.ParsedLog)
+
     log_metadata = parsed_log.get_metadata()
     log_database_options = parsed_log.get_database_options()
-
-    baseline_info = baseline_log_files_utils.get_baseline_database_options(
-        utils.BASELINE_LOGS_FOLDER,
-        log_metadata.get_product_name(),
-        log_metadata.get_version())
+    baseline_info = parsed_log.get_baseline_info()
 
     if baseline_info is None:
         return "NO BASELINE FOUND"
 
-    baseline_database_options, baseline_version = baseline_info
-    baseline_opts = baseline_database_options.get_all_options()
+    assert isinstance(baseline_info,
+                      baseline_log_files_utils.BaselineDBOptionsInfo)
 
+    baseline_opts = baseline_info.baseline_options.get_all_options()
     log_opts = log_database_options.get_all_options()
 
     db_wide_diff = \
@@ -383,7 +386,8 @@ def get_options_baseline_diff_for_display(parsed_log):
     if db_wide_diff is not None:
         db_wide_diff = db_wide_diff.get_diff_dict()
     display_diff = prepare_db_wide_diff_dict_for_display(
-        log_metadata.get_product_name(), baseline_version, db_wide_diff)
+        log_metadata.get_product_name(), baseline_info.baseline_log_path,
+        baseline_info.closest_version, db_wide_diff)
 
     cfs_names = log_database_options.get_cfs_names()
     cfs_diff = prepare_cfs_diff_dict_for_display(baseline_opts, log_opts,

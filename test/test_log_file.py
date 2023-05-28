@@ -327,9 +327,10 @@ def test_parse_db_wide_stats():
 
 def test_empty_log_file():
     with pytest.raises(utils.EmptyLogFile):
-        ParsedLog("DummyPath", [])
+        ParsedLog("DummyPath", [], should_init_baseline_info=False)
 
 
 def test_unexpected_1st_log_line():
     with pytest.raises(utils.InvalidLogFile):
-        ParsedLog("DummyPath", ["Dummy Line", "Another Dummy Line"])
+        ParsedLog("DummyPath", ["Dummy Line", "Another Dummy Line"],
+                  should_init_baseline_info=False)

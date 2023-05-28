@@ -16,10 +16,11 @@ import bisect
 import pathlib
 import re
 from dataclasses import dataclass
+from pathlib import Path
 
 import regexes
 import utils
-from db_options import DatabaseOptions
+from db_options import OptionsDiff, DatabaseOptions
 from log_file import ParsedLog
 
 
@@ -67,7 +68,7 @@ class Version:
 
 @dataclass
 class BaselineLogFileInfo:
-    file_name: str
+    file_path: Path
     version: Version
 
     def __lt__(self, other):
@@ -82,15 +83,15 @@ def find_all_baseline_log_files(baselines_logs_folder, product_name):
     else:
         assert False
 
-    logs_folder_path = pathlib.Path(baselines_logs_folder)
+    logs_folder_path = pathlib.Path(baselines_logs_folder).resolve()
 
     files = []
-    for file_name in logs_folder_path.iterdir():
-        file_match = re.findall(logs_regex, file_name.name)
+    for file_path in logs_folder_path.iterdir():
+        file_match = re.findall(logs_regex, file_path.name)
         if file_match:
             assert len(file_match) == 1
-            files.append(BaselineLogFileInfo(
-                file_name.name, Version(file_match[0])))
+            files.append(
+                BaselineLogFileInfo(file_path, Version(file_match[0])))
 
     files.sort()
     return files
@@ -112,47 +113,61 @@ def find_closest_version_idx(baseline_versions, version):
         return None
 
 
-def find_closest_baseline_log_file_name(baselines_logs_folder, product_name,
-                                        version_str):
+def find_closest_baseline_info(baselines_logs_folder, product_name,
+                               version_str):
     baseline_files = find_all_baseline_log_files(baselines_logs_folder,
                                                  product_name)
-    baseline_versions = [file.version for file in baseline_files]
+    baseline_versions = [file_info.version for file_info in baseline_files]
     if not baseline_versions:
         return None
 
     closest_version_idx = find_closest_version_idx(baseline_versions,
                                                    version_str)
-    if closest_version_idx is not None:
-        return baseline_files[closest_version_idx].file_name,\
-               baseline_files[closest_version_idx].version
-    else:
+    if closest_version_idx is None:
         return None
+
+    return baseline_files[closest_version_idx]
+
+
+@dataclass
+class BaselineDBOptionsInfo:
+    baseline_log_path: Path = None
+    baseline_options: DatabaseOptions = None
+    closest_version: Version = None
 
 
 def get_baseline_database_options(baselines_logs_folder,
                                   product_name,
                                   version_str):
     closest_baseline_info = \
-        find_closest_baseline_log_file_name(baselines_logs_folder,
-                                            product_name,
-                                            version_str)
+        find_closest_baseline_info(baselines_logs_folder,
+                                   product_name,
+                                   version_str)
     if closest_baseline_info is None:
         return None
+    assert isinstance(closest_baseline_info, BaselineLogFileInfo)
 
-    closest_baseline_log_file_name, closest_version = closest_baseline_info
-    baseline_log_path = utils.get_file_path(
-        baselines_logs_folder, closest_baseline_log_file_name)
-
+    baseline_log_path = closest_baseline_info.file_path
     with baseline_log_path.open() as baseline_log_file:
         log_lines = baseline_log_file.readlines()
         log_lines = [line for line in log_lines]
 
         main_parsing_context = utils.parsing_context
-        parsed_log = ParsedLog(str(baseline_log_path), log_lines)
+        parsed_log = ParsedLog(str(baseline_log_path), log_lines,
+                               should_init_baseline_info=False)
         utils.parsing_context = main_parsing_context
 
         baseline_options = parsed_log.get_database_options()
-        return baseline_options, closest_version
+        return BaselineDBOptionsInfo(baseline_log_path,
+                                     baseline_options,
+                                     closest_baseline_info.version)
+
+
+@dataclass
+class OptionsDiffRelToBaselineInfo:
+    baseline_log_path: Path = None
+    diff: OptionsDiff = None
+    closest_version: Version = None
 
 
 def find_options_diff_relative_to_baseline(baselines_logs_folder,
@@ -162,11 +177,15 @@ def find_options_diff_relative_to_baseline(baselines_logs_folder,
     baseline_info = get_baseline_database_options(baselines_logs_folder,
                                                   product_name,
                                                   version)
+    assert isinstance(baseline_info, BaselineDBOptionsInfo)
+
     if baseline_info is None:
         return None
 
-    baseline_database_options, closest_version = baseline_info
     diff = DatabaseOptions.get_options_diff(
-        baseline_database_options.get_all_options(),
+        baseline_info.baseline_options.get_all_options(),
         db_options.get_all_options())
-    return diff, closest_version
+
+    return OptionsDiffRelToBaselineInfo(baseline_info.baseline_log_path,
+                                        diff,
+                                        baseline_info.closest_version)

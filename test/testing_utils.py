@@ -26,7 +26,8 @@ def read_file(file_path):
 
 def create_parsed_log(file_path):
     log_lines = read_file(file_path)
-    return ParsedLog(SampleLogInfo.FILE_PATH, log_lines)
+    return ParsedLog(SampleLogInfo.FILE_PATH, log_lines,
+                     should_init_baseline_info=False)
 
 
 def line_to_entry(line, last_line=True):

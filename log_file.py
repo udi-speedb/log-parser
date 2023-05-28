@@ -15,6 +15,7 @@
 import logging
 import re
 
+import baseline_log_files_utils
 import regexes
 import utils
 from cfs_infos import CfsMetadata
@@ -154,7 +155,7 @@ class LogFileMetadata:
 
 
 class ParsedLog:
-    def __init__(self, log_file_path, log_lines):
+    def __init__(self, log_file_path, log_lines, should_init_baseline_info):
         logging.debug(f"Starting to parse {log_file_path}")
         utils.parsing_context = utils.ParsingContext()
         utils.parsing_context.parsing_starts(log_file_path)
@@ -188,6 +189,11 @@ class ParsedLog:
         utils.parsing_context.parsing_ends()
         self.warnings_mngr.set_cfs_names_on_parsing_complete(
             self.get_cfs_names())
+
+        self.baseline_info = None
+        if should_init_baseline_info:
+            self.init_baseline_info()
+
         logging.debug(f"Parsing of {self.log_file_path} Complete")
 
     def __str__(self):
@@ -476,6 +482,13 @@ class ParsedLog:
     def update_my_entities_on_new_cf(self, cf_name):
         self.events_mngr.add_cf_name(cf_name)
 
+    def init_baseline_info(self):
+        self.baseline_info = \
+            baseline_log_files_utils.get_baseline_database_options(
+                utils.BASELINE_LOGS_FOLDER,
+                self.metadata.get_product_name(),
+                self.metadata.get_version())
+
     def get_start_time(self):
         return self.metadata.get_start_time()
 
@@ -545,3 +558,6 @@ class ParsedLog:
 
     def get_curr_error_context(self):
         return get_error_context(self.get_curr_entry(), self.log_file_path)
+
+    def get_baseline_info(self):
+        return self.baseline_info
