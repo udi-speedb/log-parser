@@ -92,9 +92,11 @@ def setup_cmd_line_parser():
                         help="Print to console a summary (short) or a "
                              "detailed (long) output (default: %(default)s)")
     parser.add_argument("-j", "--json-file-name",
+                        nargs='?',
+                        const=utils.DEFAULT_JSON_FILE_NAME,
                         metavar="[json file name]",
                         help="Optional output json file name"
-                             " (default: %(default)s)")
+                             " (default: %(const)s)")
     parser.add_argument("-o", "--output-folder",
                         default=utils.DEFAULT_OUTPUT_FOLDER,
                         help="The name of the folder where output "
@@ -262,6 +264,7 @@ def main():
     verify_min_python_version()
     parser = setup_cmd_line_parser()
     cmdline_args = parser.parse_args()
+
     output_folder = cmdline_args.output_folder
 
     output_folder = prepare_output_folder(output_folder)
