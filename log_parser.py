@@ -125,7 +125,7 @@ def handle_exception(exception, console, should_exit):
 
 
 def report_exception(exception, console):
-    handle_exception(exception, console, should_exit=False)
+    handle_exception(exception, console, should_exit=True)
 
 
 def fatal_exception(exception):
