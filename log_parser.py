@@ -23,10 +23,10 @@ import sys
 import textwrap
 import threading
 import time
+from pathlib import Path
 
 import console_outputter
 import csv_outputter
-import db_options
 import json_outputter
 import utils
 from log_file import ParsedLog
@@ -239,22 +239,22 @@ def generate_csvs_if_applicable(parsed_log, output_folder, report_to_console):
     flushes_csv_path = csv_outputter.generate_flushes_csv(
         events_mngr, output_folder, report_to_console)
 
+    def generate_disp_path(path):
+        if path is None:
+            return "Not Available"
+
+        assert isinstance(path, Path)
+        return str(path)
+
     return {
-        "Counters":
-            db_options.get_sanitized_value(str(counters_csv_path)),
+        "Counters": generate_disp_path(counters_csv_path),
         "Histograms (Human-Readable)":
-            db_options.get_sanitized_value(
-                str(human_readable_histograms_csv_file_path)),
+            generate_disp_path(human_readable_histograms_csv_file_path),
         "Histograms (Tools)":
-            db_options.get_sanitized_value(
-                str(tools_histograms_csv_file_path)),
-        "Compactions-Stats":
-            db_options.get_sanitized_value(
-                str(compactions_stats_csv_path)),
-        "Compactions":
-            db_options.get_sanitized_value(
-                str(compactions_csv_path)),
-        "Flushes": db_options.get_sanitized_value(str(flushes_csv_path))
+            generate_disp_path(tools_histograms_csv_file_path),
+        "Compactions-Stats": generate_disp_path(compactions_stats_csv_path),
+        "Compactions": generate_disp_path(compactions_csv_path),
+        "Flushes": generate_disp_path(flushes_csv_path)
     }
 
 
