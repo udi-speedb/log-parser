@@ -72,7 +72,7 @@ class NotableEntityInfo:
 notable_entities = {
     "statistics": NotableEntityInfo("Statistics",
                                     "Available",
-                                    SanitizedValueType.NO_VALUE,
+                                    SanitizedValueType.NULL_PTR,
                                     "No Statistics")
 
 }
