@@ -206,9 +206,14 @@ def prepare_general_cf_info_for_display(parsed_log):
         else:
             cf_display_info["Compression"] = "UNKNOWN"
 
-        if cf_options['filter_policy'][cf_name] is not None:
-            cf_display_info["Filter-Policy"] = \
-                cf_options['filter_policy'][cf_name]
+        cf_filter_policy = cf_options['filter_policy'][cf_name]
+        if cf_filter_policy is not None:
+            if SanitizedValueType.get_type_from_str(cf_filter_policy) != \
+                    SanitizedValueType.NULL_PTR:
+                cf_display_info["Filter-Policy"] = \
+                    cf_options['filter_policy'][cf_name]
+            else:
+                cf_display_info["Filter-Policy"] = "No Filter"
         else:
             cf_display_info["Filter-Policy"] = "UNKNOWN"
 
