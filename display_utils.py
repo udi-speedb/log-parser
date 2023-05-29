@@ -273,10 +273,19 @@ def get_all_options_for_display(parsed_log):
         all_options["CF-s"] = {}
         for cf_name, cf_options in unique_cfs_options.items():
             if cf_options:
-                all_options["CF-s"][cf_name] = \
+                disp_cf_options, disp_cf_table_options =\
                     DatabaseOptions.\
                     prepare_flat_full_names_cf_options_for_display(
                         cf_options, None)
+                all_options["CF-s"][cf_name] = {}
+                if disp_cf_options:
+                    all_options["CF-s"][cf_name] = disp_cf_options
+                if disp_cf_table_options:
+                    all_options["CF-s"][cf_name]["Table"] = \
+                        disp_cf_table_options
+                if not all_options["CF-s"][cf_name]:
+                    del(all_options["CF-s"][cf_name])
+
         if not all_options["CF-s"]:
             del all_options["CF-s"]
 
