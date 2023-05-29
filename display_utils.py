@@ -146,8 +146,8 @@ def prepare_db_wide_info_for_display(parsed_log):
     display_info["Name"] = str(Path(parsed_log.get_log_file_path()))
     display_info["Start Time"] = log_file_time_info.start_time
     display_info["End Time"] = log_file_time_info.end_time
-    display_info["Log Time Span"] = f"{log_file_time_info.span_seconds:.1f} " \
-                                    f"seconds   "
+    display_info["Log Time Span"] = \
+        utils.convert_seconds_to_dd_hh_mm_ss(log_file_time_info.span_seconds)
     display_info["Creator"] = db_wide_info['creator']
     display_info["Version"] = f"{db_wide_info['version']} " \
                               f"[{db_wide_info['git_hash']}]"

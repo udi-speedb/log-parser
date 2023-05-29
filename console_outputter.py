@@ -21,13 +21,7 @@ from log_file import ParsedLog
 
 
 def get_title(log_file_path, parsed_log):
-    metadata = parsed_log.get_metadata()
-    log_time_span = metadata.get_log_time_span_seconds()
-    title = f"{log_file_path} " \
-            f"({log_time_span:.1f} Seconds) " \
-            f"[{str(metadata.get_start_time())} - " \
-            f"{str(metadata.get_end_time())}]"
-    return title
+    return f"Parsing of: {log_file_path}"
 
 
 def print_title(f, log_file_path, parsed_log):

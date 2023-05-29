@@ -106,6 +106,20 @@ def test_is_valid_time_str():
     assert not is_valid("2022/11/24-15:50:09")
 
 
+def test_convert_seconds_to_dd_hh_mm_ss():
+    one_minute = 60
+    one_hour = 3600
+    one_day = 24 * 3600
+
+    assert utils.convert_seconds_to_dd_hh_mm_ss(0) == "0d 00h 00m 00s"
+    assert utils.convert_seconds_to_dd_hh_mm_ss(1) == "0d 00h 00m 01s"
+    assert utils.convert_seconds_to_dd_hh_mm_ss(one_minute) == "0d 00h 01m 00s"
+    assert utils.convert_seconds_to_dd_hh_mm_ss(one_hour) == "0d 01h 00m 00s"
+    assert utils.convert_seconds_to_dd_hh_mm_ss(one_day) == "1d 00h 00m 00s"
+    assert utils.convert_seconds_to_dd_hh_mm_ss(
+        one_day + one_hour + one_minute + 30) == "1d 01h 01m 30s"
+
+
 def test_get_num_bytes_from_human_readable_components():
     num_bytes = utils.get_num_bytes_from_human_readable_components
 

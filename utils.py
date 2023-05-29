@@ -181,6 +181,12 @@ def compare_times_strs(time1_str, time2_str):
         return 0
 
 
+def convert_seconds_to_dd_hh_mm_ss(seconds):
+    seconds = int(seconds)
+    days = int(seconds / 86400)
+    return time.strftime(f'{days}d %Hh %Mm %Ss', time.gmtime(seconds))
+
+
 # =====================================
 #       LOGGING TYPES & UTILS
 # =====================================
