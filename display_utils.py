@@ -268,26 +268,38 @@ def get_all_options_for_display(parsed_log):
             "CF": options,
             "Table": table_options
         }
+    else:
+        all_options["CF-s (Common)"] = "No Common Options to All CF-s"
 
+    cfs_unique_key = "CF-s (Specific)"
     if unique_cfs_options:
-        all_options["CF-s"] = {}
+        all_options[cfs_unique_key] = {}
         for cf_name, cf_options in unique_cfs_options.items():
             if cf_options:
                 disp_cf_options, disp_cf_table_options =\
                     DatabaseOptions.\
                     prepare_flat_full_names_cf_options_for_display(
                         cf_options, None)
-                all_options["CF-s"][cf_name] = {}
+                all_options[cfs_unique_key][cf_name] = {}
                 if disp_cf_options:
-                    all_options["CF-s"][cf_name] = disp_cf_options
+                    all_options[cfs_unique_key][cf_name]["CF"] = \
+                        disp_cf_options
+                else:
+                    all_options[cfs_unique_key][cf_name]["CF"] = \
+                        "No Specific Options"
                 if disp_cf_table_options:
-                    all_options["CF-s"][cf_name]["Table"] = \
+                    all_options[cfs_unique_key][cf_name]["Table"] = \
                         disp_cf_table_options
-                if not all_options["CF-s"][cf_name]:
-                    del(all_options["CF-s"][cf_name])
+                else:
+                    all_options[cfs_unique_key][cf_name]["Table"] = \
+                        "No Specific Table Options"
+                if not all_options[cfs_unique_key][cf_name]:
+                    del(all_options[cfs_unique_key][cf_name])
 
-        if not all_options["CF-s"]:
-            del all_options["CF-s"]
+        if not all_options[cfs_unique_key]:
+            del all_options[cfs_unique_key]
+    else:
+        all_options[cfs_unique_key] = "ALl CF-s Have the same options."
 
     return all_options
 
