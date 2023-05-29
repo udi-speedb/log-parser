@@ -577,7 +577,7 @@ def prepare_db_ingest_info_for_display(ingest_info):
     if not ingest_info:
         return "No Ingest Info"
 
-    disp["ingest"] = utils.get_human_readable_number(ingest_info.ingest)
+    disp["ingest"] = utils.get_human_readable_num_bytes(ingest_info.ingest)
     disp["ingest-rate"] = f"{ingest_info.ingest_rate_mbps} MBps"
 
     return disp
