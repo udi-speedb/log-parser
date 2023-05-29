@@ -69,14 +69,15 @@ class NotableEntityInfo:
     display_text: str
     special_value_type: SanitizedValueType
     special_value_text: str
+    display_value: bool
 
 
 notable_entities = {
     "statistics": NotableEntityInfo("Statistics",
                                     "Available",
                                     SanitizedValueType.NULL_PTR,
-                                    "No Statistics")
-
+                                    "No Statistics",
+                                    display_value=False)
 }
 
 
@@ -97,7 +98,10 @@ def get_db_wide_notable_entities_display_info(parsed_log):
             if info.display_text is None:
                 display_value = option_value
             else:
-                display_value = f"{info.display_text} ({option_value})"
+                if info.display_value:
+                    display_value = f"{info.display_text} ({option_value})"
+                else:
+                    display_value = info.display_text
         display_info[info.display_title] = display_value
 
     return display_info

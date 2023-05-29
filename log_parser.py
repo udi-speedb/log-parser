@@ -92,12 +92,14 @@ def setup_cmd_line_parser():
                         choices=["short", "long"],
                         help="Print to console a summary (short) or a "
                              "detailed (long) output (default: %(default)s)")
-    parser.add_argument("-j", "--json-file-name",
-                        nargs='?',
-                        const=utils.DEFAULT_JSON_FILE_NAME,
-                        metavar="[json file name]",
-                        help="Optional output json file name"
-                             " (default: %(const)s)")
+    parser.add_argument("-j", "--generate-json",
+                        action="store_true",
+                        default=False,
+                        help=f"Optionally generate a JSON file in the "
+                             f"output folder with detailed information. "
+                             f"If generated, it will be called "
+                             f"{utils.DEFAULT_JSON_FILE_NAME}."
+                             f"(default: %(default)s)")
     parser.add_argument("-o", "--output-folder",
                         default=utils.DEFAULT_OUTPUT_FOLDER,
                         help="The name of the folder where output "
@@ -115,7 +117,7 @@ def setup_cmd_line_parser():
 
 def validate_and_sanitize_cmd_line_args(cmdline_args):
     # The default is short console output
-    if not cmdline_args.console and not cmdline_args.json_file_name:
+    if not cmdline_args.console and not cmdline_args.generate_json:
         cmdline_args.console = utils.ConsoleOutputType.SHORT
 
 
@@ -210,12 +212,14 @@ def generate_json_if_applicable(
         cmdline_args, parsed_log, csvs_paths, output_folder,
         report_to_console):
     json_content = None
-    if cmdline_args.json_file_name or \
+    if cmdline_args.generate_json or \
             cmdline_args.console == utils.ConsoleOutputType.LONG:
         json_content = json_outputter.get_json(parsed_log)
         json_content["CSV-s"] = csvs_paths
-        if cmdline_args.json_file_name:
-            json_outputter.write_json(cmdline_args.json_file_name,
+
+        if cmdline_args.generate_json:
+            json_file_name = utils.DEFAULT_JSON_FILE_NAME
+            json_outputter.write_json(json_file_name,
                                       json_content, output_folder,
                                       report_to_console)
 
