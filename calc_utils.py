@@ -707,10 +707,10 @@ def get_applicable_read_stats(parsed_log):
                                      cf_file_histogram_stats_mngr,
                                      cf_stats, cf_name)
             if cf_read_density:
-                stats["CF-s"][cf_name]["read_denity"] = cf_read_density
+                stats["CF-s"][cf_name]["read_density"] = cf_read_density
             else:
-                stats["CF-s"][cf_name]["read_denity"] = "No Read Density " \
-                                                        "Available"
+                stats["CF-s"][cf_name]["read_density"] = \
+                    "No Read Density Available"
 
     return stats if stats else None
 
