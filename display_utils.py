@@ -558,6 +558,33 @@ def prepare_cfs_size_bytes_growth_for_display(growth):
     if not growth:
         return "All CF-s Empty"
 
+    def get_delta_str(delta_value):
+        abs_delta_str = num_bytes_for_display(abs(delta_value))
+        if delta_value >= 0:
+            return f"(+{abs_delta_str})"
+        else:
+            return f"(-{abs_delta_str})"
+
+    def get_growth_str(start_value, end_value):
+        start_size_str = num_bytes_for_display(start_value)
+
+        if end_value is not None:
+            if start_value == end_value:
+                if start_value > 0:
+                    value_str = f"{start_size_str} (No Change)"
+                else:
+                    value_str = "Empty Level"
+            else:
+                end_size_str = num_bytes_for_display(end_value)
+                delta = end_value - start_value
+                delta_str = get_delta_str(delta)
+                value_str = \
+                    f"{start_size_str} -> {end_size_str}  {delta_str}"
+        else:
+            value_str = f"{start_size_str} -> 0"
+
+        return value_str
+
     for cf_name in growth:
         disp[cf_name] = {}
 
@@ -565,34 +592,25 @@ def prepare_cfs_size_bytes_growth_for_display(growth):
             disp[cf_name] = "Empty Column-Family"
             continue
 
+        total_bytes_start = 0
+        total_bytes_end = 0
         for level, sizes_bytes in growth[cf_name].items():
             start_size_bytes = sizes_bytes[0]
             end_size_bytes = sizes_bytes[1]
 
             if start_size_bytes is None:
                 start_size_bytes = 0
-            start_size_str = num_bytes_for_display(start_size_bytes)
+            if end_size_bytes is None:
+                end_size_bytes = 0
 
-            if end_size_bytes is not None:
-                if start_size_bytes == end_size_bytes:
-                    if start_size_bytes > 0:
-                        value_str = f"{start_size_str} (No Change)"
-                    else:
-                        value_str = "Empty Level"
-                else:
-                    end_size_str = num_bytes_for_display(end_size_bytes)
-                    delta = end_size_bytes - start_size_bytes
-                    abs_delta_str = num_bytes_for_display(abs(delta))
-                    if delta >= 0:
-                        delta_str = f"(+{abs_delta_str})"
-                    else:
-                        delta_str = f"(-{abs_delta_str})"
-                    value_str = \
-                        f"{start_size_str} -> {end_size_str}  {delta_str}"
-            else:
-                value_str = f"{start_size_str} -> 0"
+            disp[cf_name][f"Level {level}"] = get_growth_str(
+                start_size_bytes, end_size_bytes)
 
-            disp[cf_name][f"Level {level}"] = value_str
+            total_bytes_start += start_size_bytes
+            total_bytes_end += end_size_bytes
+
+        disp[cf_name]["Sum"] =\
+            get_growth_str(total_bytes_start, total_bytes_end)
 
     return disp
 
