@@ -594,7 +594,11 @@ def prepare_cfs_size_bytes_growth_for_display(growth):
 
         total_bytes_start = 0
         total_bytes_end = 0
-        for level, sizes_bytes in growth[cf_name].items():
+        # The levelt are not ordered within growth[cf_name]
+        levels_and_sizes = list(growth[cf_name].items())
+        levels_and_sizes.sort()
+
+        for level, sizes_bytes in levels_and_sizes:
             start_size_bytes = sizes_bytes[0]
             end_size_bytes = sizes_bytes[1]
 

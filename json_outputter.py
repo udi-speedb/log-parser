@@ -35,8 +35,8 @@ def get_db_size_json(db_wide_stats_mngr, compactions_stats_mngr):
 
     growth_info = \
         calc_utils.calc_cfs_size_bytes_growth(compactions_stats_mngr)
-    growth_json = display_utils.prepare_cfs_size_bytes_growth_for_display(
-        growth_info)
+    growth_json =\
+        display_utils.prepare_cfs_size_bytes_growth_for_display(growth_info)
     db_size_json["CF-s Growth"] = growth_json
 
     return db_size_json
