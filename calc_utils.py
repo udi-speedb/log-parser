@@ -408,7 +408,7 @@ def calc_cf_flushes_stats(cf_name, events_mngr):
         reason_stats.min_total_data_size_bytes = \
             min(reason_stats.min_total_data_size_bytes, total_data_size_bytes)
         reason_stats.max_total_data_size_bytes = \
-            min(reason_stats.max_total_data_size_bytes, total_data_size_bytes)
+            max(reason_stats.max_total_data_size_bytes, total_data_size_bytes)
 
     if stats:
         for reason in stats:
