@@ -493,8 +493,8 @@ def test_compactions_stats_mngr():
     stats_lines = [line.strip() for line in stats_lines]
 
     expected_level0_dict = \
-        {'CF-Num-Files': '11',
-         'Num-Files': '16',
+        {'Num-Files': '16',
+         'Files-In-Comp': '11',
          'size_bytes': 4187593113,
          'Score': '5.9',
          'Read(GB)': '131.5',
@@ -516,8 +516,8 @@ def test_compactions_stats_mngr():
          'Wblob(GB)': '0.0'}
 
     expected_sum_dict = \
-        {'CF-Num-Files': '41',
-         'Num-Files': '1894',
+        {'Num-Files': '1894',
+         'Files-In-Comp': '41',
          'size_bytes': 107073534689,
          'Score': '0.0',
          'Read(GB)': '1092.7',

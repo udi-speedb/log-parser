@@ -18,10 +18,10 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+import log_file
 import regexes
 import utils
 from db_options import OptionsDiff, DatabaseOptions
-from log_file import ParsedLog
 
 
 @dataclass
@@ -153,8 +153,8 @@ def get_baseline_database_options(baselines_logs_folder,
         log_lines = [line for line in log_lines]
 
         main_parsing_context = utils.parsing_context
-        parsed_log = ParsedLog(str(baseline_log_path), log_lines,
-                               should_init_baseline_info=False)
+        parsed_log = log_file.ParsedLog(str(baseline_log_path), log_lines,
+                                        should_init_baseline_info=False)
         utils.parsing_context = main_parsing_context
 
         baseline_options = parsed_log.get_database_options()

@@ -344,9 +344,9 @@ class CompactionStatsMngr:
                 # TODO - Error
                 return
 
-            num_files, cf_num_files = \
+            num_files, files_in_comp = \
                 CompactionStatsMngr.parse_files_field(line_fields[1])
-            if cf_num_files is None:
+            if files_in_comp is None:
                 # TODO - Error
                 return
 
@@ -358,8 +358,8 @@ class CompactionStatsMngr:
                 key += f"-{level_num}"
 
             new_entry[key] = {
-                "CF-Num-Files": cf_num_files,
                 "Num-Files": num_files,
+                "Files-In-Comp": files_in_comp,
                 "size_bytes":
                     CompactionStatsMngr.parse_size_field(size_in_units,
                                                          size_units)
