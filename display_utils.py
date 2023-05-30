@@ -196,6 +196,11 @@ def prepare_db_wide_info_for_display(parsed_log):
 
 
 def prepare_general_cf_info_for_display(parsed_log):
+    filter_stats = \
+        calc_utils.calc_filter_stats(
+            parsed_log.get_files_monitor(),
+            parsed_log.get_counters_and_histograms_mngr())
+
     display_info = {}
 
     cf_names = parsed_log.get_cfs_names_that_have_options()
@@ -238,6 +243,9 @@ def prepare_general_cf_info_for_display(parsed_log):
                     SanitizedValueType.NULL_PTR:
                 cf_display_info["Filter-Policy"] = \
                     cf_options['filter_policy'][cf_name]
+                if cf_name in filter_stats.files_filter_stats:
+                    avg_bpk = filter_stats.files_filter_stats[cf_name].avg_bpk
+                    cf_display_info["Filter-Policy"] += f" ({avg_bpk:.1f} bpk)"
             else:
                 cf_display_info["Filter-Policy"] = "No Filter"
         else:
