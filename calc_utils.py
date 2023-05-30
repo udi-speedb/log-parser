@@ -25,7 +25,7 @@ from events import FlowType, MatchingEventInfo
 from log_file import ParsedLog
 from stats_mngr import CompactionStatsMngr, CfFileHistogramStatsMngr, \
     DbWideStatsMngr, StatsMngr
-from warnings_mngr import WarningType, WarningsMngr
+from warnings_mngr import WarningType, WarningsMngr, WarningElementInfo
 
 
 def get_db_size_bytes_at_start(compaction_stats_mngr):
@@ -221,6 +221,30 @@ def get_log_file_time_info(parsed_log):
                            span_seconds=metadata.get_log_time_span_seconds())
 
 
+def get_warn_messages(raw_elements):
+    if not raw_elements:
+        return None
+
+    returned_errors = dict()
+    for cf_errors in raw_elements.values():
+        for category_errors in cf_errors.values():
+            for error_info in category_errors:
+                assert isinstance(error_info, WarningElementInfo)
+                returned_errors[error_info.time] = error_info.warning_msg
+
+    return returned_errors
+
+
+def get_error_warnings(warnings_mngr):
+    assert isinstance(warnings_mngr, WarningsMngr)
+    return get_warn_messages(warnings_mngr.get_error_warnings())
+
+
+def get_fatal_warnings(warnings_mngr):
+    assert isinstance(warnings_mngr, WarningsMngr)
+    return get_warn_messages(warnings_mngr.get_fatal_warnings())
+
+
 def get_db_wide_info(parsed_log: ParsedLog):
     metadata = parsed_log.get_metadata()
     warns_mngr = parsed_log.get_warnings_mngr()
@@ -287,8 +311,8 @@ def get_db_wide_info(parsed_log: ParsedLog):
         "avg_key_size_bytes": avg_key_size_bytes,
         "avg_value_size_bytes": avg_value_size_bytes,
         "num_warnings": warns_mngr.get_total_num_warns(),
-        "num_errors": warns_mngr.get_total_num_errors(),
-        "num_fatals": warns_mngr.get_total_num_fatals(),
+        "errors": get_error_warnings(warns_mngr),
+        "fatals": get_fatal_warnings(warns_mngr),
         "total_num_table_created_entries": total_num_table_created_entries,
         "total_num_flushed_entries": total_num_flushed_entries,
         "total_num_deletes": total_num_deletes,

@@ -65,6 +65,20 @@ def print_general_info(f, parsed_log: ParsedLog):
     display_general_info_dict = \
         display_utils.prepare_db_wide_info_for_display(parsed_log)
 
+    if isinstance(display_general_info_dict["Error Messages"], dict):
+        error_lines = ""
+        for error_time, error_msg in \
+                display_general_info_dict["Error Messages"].items():
+            error_lines += f"\n{error_time} {error_msg}"
+        display_general_info_dict["Error Messages"] = error_lines
+
+    if isinstance(display_general_info_dict["Fatal Messages"], dict):
+        error_lines = ""
+        for error_time, error_msg in \
+                display_general_info_dict["Fatal Messages"].items():
+            error_lines += f"\n{error_time} {error_msg}"
+        display_general_info_dict["Fatal Messages"] = error_lines
+
     display_general_info_dict = \
         utils.replace_key_keep_order(
             display_general_info_dict, "DB Size", "DB Size (*)")

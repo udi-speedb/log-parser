@@ -176,10 +176,17 @@ def prepare_db_wide_info_for_display(parsed_log):
     display_info["Avg. Written Value Size"] = \
         num_bytes_for_display(db_wide_info['avg_value_size_bytes'])
     display_info["Num Warnings"] = db_wide_info['num_warnings']
-    if db_wide_info['num_errors'] > 0:
-        display_info["Num Errors"] = db_wide_info['num_errors']
-    if db_wide_info['num_fatals'] > 0:
-        display_info["Num Fatals"] = db_wide_info['num_fatals']
+
+    if db_wide_info['errors'] is not None:
+        display_info["Error Messages"] = db_wide_info['errors']
+    else:
+        display_info["Error Messages"] = "No Error Messages"
+
+    if db_wide_info['fatals'] is not None:
+        display_info["Fatal Messages"] = db_wide_info['fatals']
+    else:
+        display_info["Fatal Messages"] = "No Fatal Messages"
+
     display_info.update(db_wide_notable_entities)
     display_info.update(prepare_db_wide_user_opers_stats_for_display(
         db_wide_info))
