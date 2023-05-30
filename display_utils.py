@@ -489,7 +489,7 @@ def prepare_cf_flushes_stats_for_display(parsed_log):
     compactions_stats_mngr = stats_mngr.get_compactions_stats_mngr()
 
     for cf_name in cf_names:
-        cf_disp = {}
+        cf_disp = dict()
 
         cf_flushes_stats = \
             calc_utils.calc_cf_flushes_stats(cf_name, events_mngr)
@@ -501,41 +501,44 @@ def prepare_cf_flushes_stats_for_display(parsed_log):
             write_amp_level1 = "No Write Amp for Level1"
         cf_disp["Write-Amp"] = write_amp_level1
 
-        for reason_stats in cf_flushes_stats.values():
+        for reason, reason_stats in cf_flushes_stats.items():
             assert isinstance(reason_stats, calc_utils.PerFlushReasonStats)
 
-            cf_disp["Sizes Histogram"] = calc_sizes_histogram()
+            cf_reason_disp = dict()
+            cf_reason_disp["Sizes Histogram"] = calc_sizes_histogram()
+            cf_reason_disp["Num Flushes"] = \
+                num_for_display(reason_stats.num_flushes)
 
-            cf_disp["Min Duration"] = \
+            cf_reason_disp["Min Duration"] = \
                 format_value(reason_stats.min_duration_ms,
                              suffix="ms",
                              conv_func=None)
 
-            cf_disp["Max Duration"] = \
+            cf_reason_disp["Max Duration"] = \
                 format_value(reason_stats.max_duration_ms,
                              suffix="ms",
                              conv_func=None)
 
-            cf_disp["Min Num Memtables"] = \
+            cf_reason_disp["Min Num Memtables"] = \
                 format_value(reason_stats.min_num_memtables,
                              suffix=None,
                              conv_func=None)
 
-            cf_disp["Max Num Memtables"] = \
+            cf_reason_disp["Max Num Memtables"] = \
                 format_value(reason_stats.max_num_memtables,
                              suffix=None,
                              conv_func=None)
 
-            cf_disp["Min Total Data Size"] = \
+            cf_reason_disp["Min Total Data Size"] = \
                 format_value(reason_stats.min_total_data_size_bytes,
                              suffix=None,
                              conv_func=num_bytes_for_display)
 
-            cf_disp["Max Total Data Size"] = \
+            cf_reason_disp["Max Total Data Size"] = \
                 format_value(reason_stats.max_total_data_size_bytes,
                              suffix=None,
                              conv_func=num_bytes_for_display)
-
+            cf_disp[reason] = cf_reason_disp
         disp[cf_name] = cf_disp
 
     return disp
@@ -893,13 +896,15 @@ def prepare_applicable_read_stats(counters_mngr, stats_mngr):
             get_histogram_entry_display_values(get_histogram)
     else:
         logging.info("No Get latency histogram (maybe no stats)")
-        stats["Get"] = "No Get Info"
+        stats["Get Histogram"] = "No Get Info"
 
     multi_get_histogram = \
         counters_mngr.get_last_histogram_entry(
             multi_get_counter_name, non_zero=True)
     if multi_get_histogram:
-        stats["Multi-Get"] = multi_get_histogram["values"]
+        stats["Multi-Get Histogram"] = \
+            CountersAndHistogramsMngr.\
+            get_histogram_entry_display_values(multi_get_histogram)
     else:
         logging.info("No Multi-Get latency histogram (maybe no stats)")
         stats["Multi-Get"] = "No Multi-Get Info"

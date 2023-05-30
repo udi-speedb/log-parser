@@ -299,9 +299,5 @@ class CountersAndHistogramsMngr:
         disp_values["P95"] = f'{values["P95"]:.1f} us'
         disp_values["P99"] = f'{values["P99"]:.1f} us'
         disp_values["P100"] = f'{values["P100"]:.1f} us'
-        disp_values["Interval Count"] = \
-            utils.get_human_readable_number(values["Interval Count"])
-        disp_values["Interval Sum"] = \
-            utils.get_human_readable_number(values["Interval Sum"])
 
         return disp_values
