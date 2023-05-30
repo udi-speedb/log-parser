@@ -19,7 +19,6 @@ class CompactionState:
 @dataclass
 class PreFinishStatsInfo:
     cf_name: str
-    max_score: float = 0.0
     read_rate_mbps: float = 0.0
     write_rate_mbps: float = 0.0
     read_write_amplify: float = 0.0
@@ -140,10 +139,9 @@ class CompactionsMonitor:
                            entry.get_msg())
         if not match:
             return False
-        assert len(match) == 1 and len(match[0]) == 8
+        assert len(match) == 1 and len(match[0]) == 7
 
         info = PreFinishStatsInfo(*match[0])
-        info.max_score = float(info.max_score)
         info.read_rate_mbps = float(info.read_rate_mbps)
         info.write_rate_mbps = float(info.write_rate_mbps)
         info.read_write_amplify = float(info.read_write_amplify)

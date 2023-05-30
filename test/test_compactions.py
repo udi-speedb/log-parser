@@ -169,7 +169,6 @@ def test_try_parse_as_pre_finish_stats_line():
 
     expected_pre_finish_info = \
         compactions.PreFinishStatsInfo(cf_name=cf2,
-                                       max_score=max_score,
                                        read_rate_mbps=read_rate_mbps,
                                        write_rate_mbps=write_rate_mbps,
                                        read_write_amplify=read_write_amplify,

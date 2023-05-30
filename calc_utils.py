@@ -27,8 +27,6 @@ from stats_mngr import CompactionStatsMngr, CfFileHistogramStatsMngr, \
     DbWideStatsMngr
 from warnings_mngr import WarningType, WarningsMngr
 
-MAX_INT = 10 ** 30
-
 
 def get_db_size_bytes_at_start(compaction_stats_mngr):
     assert isinstance(compaction_stats_mngr, CompactionStatsMngr)
@@ -354,12 +352,12 @@ class PerFlushReasonStats:
         field(default_factory=lambda: ([0] * (len(
             FLUSHED_SIZES_HISTOGRAM_BUCKETS_MB)+1)))
 
-    min_duration_ms: int = MAX_INT
-    max_duration_ms: int = 0
-    min_num_memtables: int = MAX_INT
-    max_num_memtables: int = 0
-    min_total_data_size_bytes: int = MAX_INT
-    max_total_data_size_bytes: int = 0
+    min_duration_ms: int = None
+    max_duration_ms: int = None
+    min_num_memtables: int = None
+    max_num_memtables: int = None
+    min_total_data_size_bytes: int = None
+    max_total_data_size_bytes: int = None
 
 
 def calc_cf_flushes_stats(cf_name, events_mngr):
@@ -367,6 +365,12 @@ def calc_cf_flushes_stats(cf_name, events_mngr):
                                                      cf_name)
     if not cf_flush_events:
         return {}
+
+    def get_min(curr, new):
+        return min(curr, new) if curr is not None else new
+
+    def get_max(curr, new):
+        return max(curr, new) if curr is not None else new
 
     stats = {}
     for events_pair in cf_flush_events:
@@ -398,21 +402,23 @@ def calc_cf_flushes_stats(cf_name, events_mngr):
         reason_stats.num_flushes += 1
         reason_stats.sizes_histogram[bucket_idx] += 1
         reason_stats.min_duration_ms = \
-            min(reason_stats.min_duration_ms, flush_duration_ms)
+            get_min(reason_stats.min_duration_ms, flush_duration_ms)
         reason_stats.max_duration_ms = \
-            max(reason_stats.max_duration_ms, flush_duration_ms)
+            get_max(reason_stats.max_duration_ms, flush_duration_ms)
         reason_stats.min_num_memtables = \
-            min(reason_stats.min_num_memtables, num_memtables)
+            get_min(reason_stats.min_num_memtables, num_memtables)
         reason_stats.max_num_memtables = \
-            max(reason_stats.max_num_memtables, num_memtables)
+            get_max(reason_stats.max_num_memtables, num_memtables)
         reason_stats.min_total_data_size_bytes = \
-            min(reason_stats.min_total_data_size_bytes, total_data_size_bytes)
+            get_min(reason_stats.min_total_data_size_bytes,
+                    total_data_size_bytes)
         reason_stats.max_total_data_size_bytes = \
-            max(reason_stats.max_total_data_size_bytes, total_data_size_bytes)
+            get_max(reason_stats.max_total_data_size_bytes,
+                    total_data_size_bytes)
 
     if stats:
         for reason in stats:
-            stats[reason] = asdict(stats[reason])
+            stats[reason] = stats[reason]
 
     return stats
 
@@ -438,34 +444,39 @@ def get_cf_per_level_write_amp(compactions_stats_mngr, cf_name):
 @dataclass
 class CfCompactionStats:
     num_compactions: int = 0
-    min_compaction_bw_mbps: float = 10 ** 30
-    max_compaction_bw_mbps: float = 0.0
+    min_compaction_bw_mbps: float = None
+    max_compaction_bw_mbps: float = None
     per_level_write_amp: dict = None
     comp_rate: float = None
     comp_merge_rate: float = None
 
 
-def calc_cf_compactions_stats(cf_name, parsed_log):
-    compactions_monitor = parsed_log.get_compactions_monitor()
-
+def calc_cf_compactions_stats(cf_name, log_start_time, compactions_monitor,
+                              compactions_stats_mngr):
     cf_jobs = compactions_monitor.get_cf_finished_jobs(cf_name)
     if not cf_jobs:
-        return {}
+        return None
 
     stats = CfCompactionStats()
     for job in cf_jobs.values():
         stats.num_compactions += 1
 
         if job.pre_finish_info:
-            stats.min_compaction_bw_mbps = \
-                min(stats.min_compaction_bw_mbps,
-                    job.pre_finish_info.write_rate_mbps)
-            stats.max_compaction_bw_mbps = \
-                max(stats.max_compaction_bw_mbps,
-                    job.pre_finish_info.write_rate_mbps)
+            if stats.min_compaction_bw_mbps is None:
+                stats.min_compaction_bw_mbps = \
+                    job.pre_finish_info.write_rate_mbps
+            else:
+                stats.min_compaction_bw_mbps = \
+                    min(stats.min_compaction_bw_mbps,
+                        job.pre_finish_info.write_rate_mbps)
+            if stats.max_compaction_bw_mbps is None:
+                stats.max_compaction_bw_mbps = \
+                    job.pre_finish_info.write_rate_mbps
+            else:
+                stats.max_compaction_bw_mbps = \
+                    max(stats.max_compaction_bw_mbps,
+                        job.pre_finish_info.write_rate_mbps)
 
-    compactions_stats_mngr = \
-        parsed_log.get_stats_mngr().get_compactions_stats_mngr()
     last_entry = compactions_stats_mngr.get_last_cf_level_entry(cf_name)
     if last_entry:
         per_level_write_amp = \
@@ -478,19 +489,18 @@ def calc_cf_compactions_stats(cf_name, parsed_log):
             per_level_write_amp["SUM"] = sum_write_amp
             stats.per_level_write_amp = per_level_write_amp
 
-        start_time = parsed_log.get_metadata().get_start_time()
         uptime = \
             CompactionStatsMngr.get_level_entry_uptime_seconds(last_entry,
-                                                               start_time)
+                                                               log_start_time)
         if uptime > 0.0:
             comp_sec = float(CompactionStatsMngr.get_sum_value(
                 last_entry, CompactionStatsMngr.LevelFields.COMP_SEC))
             comp_merge_sec = float(CompactionStatsMngr.get_sum_value(
                 last_entry, CompactionStatsMngr.LevelFields.COMP_MERGE_CPU))
-            stats.comp_rate = f"{(comp_sec / uptime):.1f}"
-            stats.comp_merge_rate = f"{float(comp_merge_sec / uptime):.1f}"
+            stats.comp_rate = f"{(comp_sec / uptime):.3f}"
+            stats.comp_merge_rate = f"{float(comp_merge_sec / uptime):.3f}"
 
-    return asdict(stats)
+    return stats
 
 
 def calc_all_events_histogram(cf_names, events_mngr):

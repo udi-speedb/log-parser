@@ -33,6 +33,19 @@ num_for_display = utils.get_human_readable_number
 num_bytes_for_display = utils.get_human_readable_num_bytes
 
 
+def format_value(value, suffix=None, conv_func=None):
+    if value is not None:
+        if conv_func is not None:
+            value = conv_func(value)
+        if suffix is not None:
+            suffix = " " + suffix
+        else:
+            suffix = ""
+        return f"{value}{suffix}"
+    else:
+        return "No Information"
+
+
 def prepare_db_wide_user_opers_stats_for_display(db_wide_info):
     display_info = {}
 
@@ -430,7 +443,7 @@ def prepare_cf_flushes_stats_for_display(parsed_log):
         sizes_histogram = {}
         bucket_min_size_mb = 0
         for i, num_in_bucket in \
-                enumerate(reason_stats["sizes_histogram"]):
+                enumerate(reason_stats.sizes_histogram):
             if i < len(calc_utils.FLUSHED_SIZES_HISTOGRAM_BUCKETS_MB):
                 bucket_max_size_mb = \
                     calc_utils.FLUSHED_SIZES_HISTOGRAM_BUCKETS_MB[i]
@@ -460,23 +473,34 @@ def prepare_cf_flushes_stats_for_display(parsed_log):
     compactions_stats_mngr = stats_mngr.get_compactions_stats_mngr()
 
     for cf_name in cf_names:
-        cf_flushes_stats = calc_utils.calc_cf_flushes_stats(cf_name,
-                                                            events_mngr)
-        if cf_flushes_stats:
-            write_amp_level1 = get_write_amp_level1()
-            if not write_amp_level1:
-                write_amp_level1 = "No Write Amp for Level1"
-            for reason_stats in cf_flushes_stats.values():
-                reason_stats["sizes_histogram"] = calc_sizes_histogram()
+        cf_disp = {}
 
-                reason_stats["min_total_data_size_bytes"] = \
-                    num_bytes_for_display(
-                        reason_stats["min_total_data_size_bytes"])
-                reason_stats["max_total_data_size_bytes"] = \
-                    num_bytes_for_display(
-                        reason_stats["max_total_data_size_bytes"])
-            cf_flushes_stats["Write-Amp"] = write_amp_level1
-            disp[cf_name] = cf_flushes_stats
+        cf_flushes_stats = \
+            calc_utils.calc_cf_flushes_stats(cf_name, events_mngr)
+        if not cf_flushes_stats:
+            continue
+
+        write_amp_level1 = get_write_amp_level1()
+        if not write_amp_level1:
+            write_amp_level1 = "No Write Amp for Level1"
+        cf_disp["Write-Amp"] = write_amp_level1
+
+        for reason_stats in cf_flushes_stats.values():
+            assert isinstance(reason_stats, calc_utils.PerFlushReasonStats)
+
+            cf_disp["Sizes Histogram"] = calc_sizes_histogram()
+
+            cf_disp["Min Total Data Size"] = \
+                format_value(reason_stats.min_total_data_size_bytes,
+                             suffix=None,
+                             conv_func=num_bytes_for_display)
+
+            cf_disp["Max Total Data Size"] = \
+                format_value(reason_stats.max_total_data_size_bytes,
+                             suffix=None,
+                             conv_func=num_bytes_for_display)
+
+        disp[cf_name] = cf_disp
 
     return disp
 
@@ -495,11 +519,33 @@ def prepare_cf_compactions_stats_for_display(parsed_log):
     disp = {}
 
     cf_names = parsed_log.get_cfs_names()
+    log_start_time = parsed_log.get_metadata().get_start_time()
+    compactions_monitor = parsed_log.get_compactions_monitor()
+    compactions_stats_mngr = \
+        parsed_log.get_stats_mngr().get_compactions_stats_mngr()
+
     for cf_name in cf_names:
         cf_compactions_stats = \
-            calc_utils.calc_cf_compactions_stats(cf_name, parsed_log)
+            calc_utils.calc_cf_compactions_stats(
+                cf_name, log_start_time, compactions_monitor,
+                compactions_stats_mngr)
+
         if cf_compactions_stats:
-            disp[cf_name] = cf_compactions_stats
+            assert isinstance(cf_compactions_stats,
+                              calc_utils.CfCompactionStats)
+            s = cf_compactions_stats
+            disp[cf_name] = {
+                "Num Compactions": s.num_compactions,
+                "Min Compactions BW":
+                    format_value(s.min_compaction_bw_mbps, "MBPS"),
+                "Max Compactions BW":
+                    format_value(s.max_compaction_bw_mbps, "MBPS"),
+                "Comp Rate": format_value(s.comp_rate, "per sec"),
+                "Comp Merge Rate": format_value(s.comp_merge_rate, "per sec"),
+                "Per-Level Write-Amp": s.per_level_write_amp
+            }
+        else:
+            disp[cf_name] = "No Compaction Stats"
 
     return disp
 

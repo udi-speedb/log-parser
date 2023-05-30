@@ -26,7 +26,7 @@ NUM_WITH_UNIT = fr'{FLOAT_C}\s*{NUM_UNIT}?\s*'
 NUM_WITH_UNIT_ONLY = fr"{NUM_WITH_UNIT}\Z"
 NUM_BYTES_WITH_UNIT = fr'{FLOAT_C}\s*{BYTES_UNIT}?\s*'
 NUM_BYTES_WITH_UNIT_ONLY = fr'{NUM_BYTES_WITH_UNIT}\Z'
-CF_NAME = r'\[(\w*?)\]'
+CF_NAME = r'\[([\w\]]*)\]'
 CF_NAME1 = r'\[(?P<cf>.*)\]'
 CF_ID = fr'\(ID\s+{INT_C}\)'
 JOB_ID = r"\[JOB ([\d+]+)\]"
@@ -192,15 +192,14 @@ COMPACTION_BEFORE_SCORE_LINE = \
 # output_compression: NoCompression
 # The following regex matches this line and extracts the following fields:
 # 0: cf name
-# 1: max score
-# 2: MB/sec - <Rate> rd
-# 3: MB/sec - <Rate> wr
-# 4: read-write-amplify
-# 5: write-amplify
-# 6: records in
-# 7: records dropped
+# 1: MB/sec - <Rate> rd
+# 2: MB/sec - <Rate> wr
+# 3: read-write-amplify
+# 4: write-amplify
+# 5: records in
+# 6: records dropped
 #
 COMPACTION_JOB_FINISH_STATS_LINE = \
-    fr"{CF_NAME}.*max score\s*{FLOAT_C},\s*MB/sec:\s*{FLOAT_C}\s*rd," \
+    fr"{CF_NAME}.*,\s*MB\/sec:\s*{FLOAT_C}\s*rd," \
     fr"\s*{FLOAT_C}\s*wr,.*read-write-amplify\({FLOAT_C}\)\s*write-amplify\(" \
     fr"{FLOAT_C}\).*records in:\s*{INT_C},\s*records dropped:\s*{INT_C}"
