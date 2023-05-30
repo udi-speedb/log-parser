@@ -734,8 +734,6 @@ def prepare_block_stats_of_cache_for_display(block_stats):
 
     disp["Avg. Size"] = num_for_display(int(block_stats.avg_size_bytes))
     disp["Max Size"] = num_for_display(block_stats.max_size_bytes)
-    disp["Total Size (All Blocks)"] = \
-        num_for_display(block_stats.max_size_bytes)
 
     return disp
 
