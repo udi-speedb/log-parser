@@ -78,7 +78,12 @@ def get_compactions_json(parsed_log):
 
 
 def get_reads_json(parsed_log):
-    read_stats = calc_utils.get_applicable_read_stats(parsed_log)
+    stats_mngr = parsed_log.get_stats_mngr()
+    counters_and_histograms_mngr = \
+        parsed_log.get_counters_and_histograms_mngr()
+    read_stats = \
+        calc_utils.get_applicable_read_stats(counters_and_histograms_mngr,
+                                             stats_mngr)
     if read_stats:
         return read_stats
     else:

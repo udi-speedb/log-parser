@@ -24,7 +24,7 @@ from events import EventType
 from events import FlowType, MatchingEventInfo
 from log_file import ParsedLog
 from stats_mngr import CompactionStatsMngr, CfFileHistogramStatsMngr, \
-    DbWideStatsMngr
+    DbWideStatsMngr, StatsMngr
 from warnings_mngr import WarningType, WarningsMngr
 
 
@@ -672,13 +672,13 @@ def calc_cf_read_density(compactions_stats_mngr, cf_file_histogram_stats_mngr,
     return per_level_read_density
 
 
-def get_applicable_read_stats(parsed_log):
-    get_counter_name = "rocksdb.db.get.micros"
-    multi_get_counter_name = "rocksdb.db.multiget"
+def get_applicable_read_stats(counters_mngr, stats_mngr):
+    assert isinstance(counters_mngr, CountersAndHistogramsMngr)
+    assert isinstance(stats_mngr, StatsMngr)
 
-    stats_mngr = parsed_log.get_stats_mngr()
-    counters_and_histograms_mngr = \
-        parsed_log.get_counters_and_histograms_mngr()
+    get_counter_name = "rocksdb.db.get.micros"
+    multi_get_counter_name = "rocksdb.db.multiget.micros"
+
     cf_file_histogram_stats_mngr =\
         stats_mngr.get_cf_file_histogram_stats_mngr()
     compactions_stats_mngr = stats_mngr.get_compactions_stats_mngr()
@@ -686,7 +686,7 @@ def get_applicable_read_stats(parsed_log):
     stats = dict()
 
     get_histogram = \
-        counters_and_histograms_mngr.get_last_histogram_entry(
+        counters_mngr.get_last_histogram_entry(
             get_counter_name, non_zero=True)
     if get_histogram:
         stats["Get"] = \
@@ -697,7 +697,7 @@ def get_applicable_read_stats(parsed_log):
         stats["Get"] = "No Get Info"
 
     multi_get_histogram = \
-        counters_and_histograms_mngr.get_last_histogram_entry(
+        counters_mngr.get_last_histogram_entry(
             multi_get_counter_name, non_zero=True)
     if multi_get_histogram:
         stats["Multi-Get"] = multi_get_histogram["values"]
