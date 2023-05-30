@@ -490,6 +490,26 @@ def prepare_cf_flushes_stats_for_display(parsed_log):
 
             cf_disp["Sizes Histogram"] = calc_sizes_histogram()
 
+            cf_disp["Min Duration"] = \
+                format_value(reason_stats.min_duration_ms,
+                             suffix="ms",
+                             conv_func=None)
+
+            cf_disp["Max Duration"] = \
+                format_value(reason_stats.max_duration_ms,
+                             suffix="ms",
+                             conv_func=None)
+
+            cf_disp["Min Num Memtables"] = \
+                format_value(reason_stats.min_num_memtables,
+                             suffix=None,
+                             conv_func=None)
+
+            cf_disp["Max Num Memtables"] = \
+                format_value(reason_stats.max_num_memtables,
+                             suffix=None,
+                             conv_func=None)
+
             cf_disp["Min Total Data Size"] = \
                 format_value(reason_stats.min_total_data_size_bytes,
                              suffix=None,
