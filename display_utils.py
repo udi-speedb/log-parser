@@ -575,8 +575,9 @@ def prepare_cf_compactions_stats_for_display(parsed_log):
                     format_value(s.min_compaction_bw_mbps, "MBPS"),
                 "Max Compactions BW":
                     format_value(s.max_compaction_bw_mbps, "MBPS"),
-                "Comp Rate": format_value(s.comp_rate, "per sec"),
-                "Comp Merge Rate": format_value(s.comp_merge_rate, "per sec"),
+                "Comp": format_value(s.comp_sec, "seconds"),
+                "Comp Merge CPU": format_value(s.comp_merge_cpu_sec,
+                                               "seconds"),
                 "Per-Level Write-Amp": s.per_level_write_amp
             }
         else:

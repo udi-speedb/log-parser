@@ -471,8 +471,8 @@ class CfCompactionStats:
     min_compaction_bw_mbps: float = None
     max_compaction_bw_mbps: float = None
     per_level_write_amp: dict = None
-    comp_rate: float = None
-    comp_merge_rate: float = None
+    comp_sec: float = None
+    comp_merge_cpu_sec: float = None
 
 
 def calc_cf_compactions_stats(cf_name, log_start_time, compactions_monitor,
@@ -517,12 +517,13 @@ def calc_cf_compactions_stats(cf_name, log_start_time, compactions_monitor,
             CompactionStatsMngr.get_level_entry_uptime_seconds(last_entry,
                                                                log_start_time)
         if uptime > 0.0:
-            comp_sec = float(CompactionStatsMngr.get_sum_value(
-                last_entry, CompactionStatsMngr.LevelFields.COMP_SEC))
-            comp_merge_sec = float(CompactionStatsMngr.get_sum_value(
-                last_entry, CompactionStatsMngr.LevelFields.COMP_MERGE_CPU))
-            stats.comp_rate = f"{(comp_sec / uptime):.3f}"
-            stats.comp_merge_rate = f"{float(comp_merge_sec / uptime):.3f}"
+            stats.comp_sec = \
+                float(CompactionStatsMngr.get_sum_value(
+                    last_entry, CompactionStatsMngr.LevelFields.COMP_SEC))
+            stats.comp_merge_cpu_sec =\
+                float(CompactionStatsMngr.get_sum_value(
+                    last_entry,
+                    CompactionStatsMngr.LevelFields.COMP_MERGE_CPU))
 
     return stats
 

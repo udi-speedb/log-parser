@@ -851,7 +851,6 @@ class BlockCacheStatsMngr:
 
     def add_lines(self, time, cf_name, db_stats_lines):
         if len(db_stats_lines) < 2:
-            logging.error("XXXXXXXXXXXXXXXXXXXXXXXXXXXx")
             return
 
         cache_id = self.parse_cache_id_line(db_stats_lines[0])
