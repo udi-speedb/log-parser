@@ -82,8 +82,9 @@ def get_reads_json(parsed_log):
     counters_and_histograms_mngr = \
         parsed_log.get_counters_and_histograms_mngr()
     read_stats = \
-        calc_utils.get_applicable_read_stats(counters_and_histograms_mngr,
-                                             stats_mngr)
+        display_utils.\
+        prepare_applicable_read_stats(counters_and_histograms_mngr,
+                                      stats_mngr)
     if read_stats:
         return read_stats
     else:

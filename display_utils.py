@@ -24,9 +24,10 @@ import db_files
 import db_options
 import log_file
 import utils
+from counters import CountersAndHistogramsMngr
 from db_options import DatabaseOptions, CfsOptionsDiff, SectionType
 from db_options import SanitizedValueType
-from stats_mngr import CompactionStatsMngr
+from stats_mngr import CompactionStatsMngr, StatsMngr
 from warnings_mngr import WarningType, WarningElementInfo, WarningsMngr
 
 num_for_display = utils.get_human_readable_number
@@ -868,3 +869,63 @@ def prepare_filter_stats_for_display(filter_stats):
         disp["Counters"] = "No Filter Counters Available"
 
     return disp
+
+
+def prepare_applicable_read_stats(counters_mngr, stats_mngr):
+    assert isinstance(counters_mngr, CountersAndHistogramsMngr)
+    assert isinstance(stats_mngr, StatsMngr)
+
+    get_counter_name = "rocksdb.db.get.micros"
+    multi_get_counter_name = "rocksdb.db.multiget.micros"
+
+    cf_file_histogram_stats_mngr =\
+        stats_mngr.get_cf_file_histogram_stats_mngr()
+    compactions_stats_mngr = stats_mngr.get_compactions_stats_mngr()
+
+    stats = dict()
+
+    get_histogram = \
+        counters_mngr.get_last_histogram_entry(
+            get_counter_name, non_zero=True)
+    if get_histogram:
+        stats["Get"] = \
+            CountersAndHistogramsMngr.\
+            get_histogram_entry_display_values(get_histogram)
+    else:
+        logging.info("No Get latency histogram (maybe no stats)")
+        stats["Get"] = "No Get Info"
+
+    multi_get_histogram = \
+        counters_mngr.get_last_histogram_entry(
+            multi_get_counter_name, non_zero=True)
+    if multi_get_histogram:
+        stats["Multi-Get"] = multi_get_histogram["values"]
+    else:
+        logging.info("No Multi-Get latency histogram (maybe no stats)")
+        stats["Multi-Get"] = "No Multi-Get Info"
+
+    per_cf_stats = \
+        calc_utils.calc_read_latency_per_cf_stats(cf_file_histogram_stats_mngr)
+    if per_cf_stats:
+        cfs_key = "Per CF Read Latency"
+        stats[cfs_key] = {}
+        for cf_name, cf_stats in per_cf_stats.items():
+            stats[cfs_key][cf_name] = {
+                "Num Reads": num_for_display(cf_stats.num_reads),
+                "Avg. Read Latency": f"{cf_stats.avg_read_latency_us:.1f} us",
+                "Max Read Latency": f"{cf_stats.max_read_latency_us} us",
+                "Read % of All CF-s": f"{cf_stats.read_percent_of_all_cfs}"
+            }
+
+        for cf_name, cf_stats in per_cf_stats.items():
+            cf_read_density = \
+                calc_utils.calc_cf_read_density(compactions_stats_mngr,
+                                                cf_file_histogram_stats_mngr,
+                                                cf_stats, cf_name)
+            if cf_read_density:
+                stats[cfs_key][cf_name]["read_density"] = cf_read_density
+            else:
+                stats[cfs_key][cf_name]["read_density"] = \
+                    "No Read Density Available"
+
+    return stats if stats else None
