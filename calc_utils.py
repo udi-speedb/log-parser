@@ -732,7 +732,8 @@ def get_applicable_read_stats(counters_mngr, stats_mngr):
 
     per_cf_stats = calc_read_latency_per_cf_stats(cf_file_histogram_stats_mngr)
     if per_cf_stats:
-        stats["CF-s"] = \
+        cfs_key = "Per CF Read Latency"
+        stats[cfs_key] = \
             {cf_name: asdict(cf_stats)
              for cf_name, cf_stats in per_cf_stats.items()}
 
@@ -742,9 +743,9 @@ def get_applicable_read_stats(counters_mngr, stats_mngr):
                                      cf_file_histogram_stats_mngr,
                                      cf_stats, cf_name)
             if cf_read_density:
-                stats["CF-s"][cf_name]["read_density"] = cf_read_density
+                stats[cfs_key][cf_name]["read_density"] = cf_read_density
             else:
-                stats["CF-s"][cf_name]["read_density"] = \
+                stats[cfs_key][cf_name]["read_density"] = \
                     "No Read Density Available"
 
     return stats if stats else None
