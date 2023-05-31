@@ -879,6 +879,10 @@ class FilterCounters:
     false_positives: int = 0
     one_in_n_fpr: int = 0
 
+    def are_all_zeroes(self):
+        return self.negatives + self.positives + self.true_positives + \
+               self.false_positives + self.one_in_n_fpr == 0
+
 
 def collect_filter_counters(counters_mngr):
     assert isinstance(counters_mngr, CountersAndHistogramsMngr)

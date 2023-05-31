@@ -900,7 +900,8 @@ def prepare_filter_stats_for_display(filter_stats):
     else:
         disp["CF-s"] = "No Filters used In SST-s"
 
-    if filter_stats.filter_counters:
+    if filter_stats.filter_counters and not \
+            filter_stats.filter_counters.are_all_zeroes():
         disp_counters = {
             "False-Positive-Rate":
                 f"1 in {filter_stats.filter_counters.one_in_n_fpr}",
@@ -918,48 +919,62 @@ def prepare_filter_stats_for_display(filter_stats):
     return disp
 
 
-def prepare_applicable_read_stats(counters_mngr, stats_mngr):
+def prepare_filter_effectiveness_stats_for_display(
+        counters_mngr, files_monitor):
     assert isinstance(counters_mngr, CountersAndHistogramsMngr)
-    assert isinstance(stats_mngr, StatsMngr)
+    assert isinstance(files_monitor, db_files.DbFilesMonitor)
+
+    filter_stats = calc_utils.calc_filter_stats(files_monitor, counters_mngr)
+
+    if filter_stats:
+        return prepare_filter_stats_for_display(filter_stats)
+    else:
+        return "No Filter Stats Available"
+
+
+def prepare_get_histogram_for_display(counters_mngr):
+    assert isinstance(counters_mngr, CountersAndHistogramsMngr)
 
     get_counter_name = "rocksdb.db.get.micros"
-    multi_get_counter_name = "rocksdb.db.multiget.micros"
-
-    cf_file_histogram_stats_mngr =\
-        stats_mngr.get_cf_file_histogram_stats_mngr()
-    compactions_stats_mngr = stats_mngr.get_compactions_stats_mngr()
-
-    stats = dict()
-
     get_histogram = \
         counters_mngr.get_last_histogram_entry(
             get_counter_name, non_zero=True)
+
     if get_histogram:
-        stats["Get"] = \
-            CountersAndHistogramsMngr.\
+        return CountersAndHistogramsMngr.\
             get_histogram_entry_display_values(get_histogram)
     else:
         logging.info("No Get latency histogram (maybe no stats)")
-        stats["Get Histogram"] = "No Get Info"
+        return "No Get Info"
+
+
+def prepare_multi_get_histogram_for_display(counters_mngr):
+    assert isinstance(counters_mngr, CountersAndHistogramsMngr)
+
+    multi_get_counter_name = "rocksdb.db.multiget.micros"
 
     multi_get_histogram = \
         counters_mngr.get_last_histogram_entry(
             multi_get_counter_name, non_zero=True)
+
     if multi_get_histogram:
-        stats["Multi-Get Histogram"] = \
-            CountersAndHistogramsMngr.\
+        return counters_mngr.\
             get_histogram_entry_display_values(multi_get_histogram)
     else:
         logging.info("No Multi-Get latency histogram (maybe no stats)")
-        stats["Multi-Get"] = "No Multi-Get Info"
+        return "No Multi-Get Info"
 
+
+def prepare_per_cf_read_latency_for_display(
+        cf_file_histogram_stats_mngr, compactions_stats_mngr):
     per_cf_stats = \
         calc_utils.calc_read_latency_per_cf_stats(cf_file_histogram_stats_mngr)
+
+    stats = dict()
+
     if per_cf_stats:
-        cfs_key = "Per CF Read Latency"
-        stats[cfs_key] = {}
         for cf_name, cf_stats in per_cf_stats.items():
-            stats[cfs_key][cf_name] = {
+            stats[cf_name] = {
                 "Num Reads": num_for_display(cf_stats.num_reads),
                 "Avg. Read Latency": f"{cf_stats.avg_read_latency_us:.1f} us",
                 "Max Read Latency": f"{cf_stats.max_read_latency_us:.1f} us",
@@ -977,9 +992,31 @@ def prepare_applicable_read_stats(counters_mngr, stats_mngr):
                     cf_read_density[level] = \
                         f"{cf_read_density[level]:.1f}%"
 
-                stats[cfs_key][cf_name]["Read Density"] = cf_read_density
+                stats[cf_name]["Read Density"] = cf_read_density
             else:
-                stats[cfs_key][cf_name]["read_density"] = \
-                    "No Read Density Available"
+                stats[cf_name]["read_density"] = "No Read Density Available"
+    return stats
+
+
+def prepare_applicable_read_stats(counters_mngr, stats_mngr, files_monitor):
+    assert isinstance(counters_mngr, CountersAndHistogramsMngr)
+    assert isinstance(stats_mngr, StatsMngr)
+    assert isinstance(files_monitor, db_files.DbFilesMonitor)
+
+    stats = dict()
+    stats["Get Histogram"] = prepare_get_histogram_for_display(counters_mngr)
+    stats["Multi-Get Histogram"] = \
+        prepare_multi_get_histogram_for_display(counters_mngr)
+
+    cf_file_histogram_stats_mngr =\
+        stats_mngr.get_cf_file_histogram_stats_mngr()
+    compactions_stats_mngr = stats_mngr.get_compactions_stats_mngr()
+    stats["Per CF Read Latency"] = \
+        prepare_per_cf_read_latency_for_display(
+            cf_file_histogram_stats_mngr, compactions_stats_mngr)
+
+    stats["Filter Effectiveness"] = \
+        prepare_filter_effectiveness_stats_for_display(
+            counters_mngr, files_monitor)
 
     return stats if stats else None

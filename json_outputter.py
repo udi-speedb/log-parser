@@ -79,12 +79,12 @@ def get_compactions_json(parsed_log):
 
 def get_reads_json(parsed_log):
     stats_mngr = parsed_log.get_stats_mngr()
-    counters_mngr = \
-        parsed_log.get_counters_mngr()
+    counters_mngr = parsed_log.get_counters_mngr()
+    files_monitor = parsed_log.get_files_monitor()
+
     read_stats = \
-        display_utils.\
-        prepare_applicable_read_stats(counters_mngr,
-                                      stats_mngr)
+        display_utils.prepare_applicable_read_stats(
+            counters_mngr, stats_mngr, files_monitor)
     if read_stats:
         return read_stats
     else:
@@ -153,20 +153,6 @@ def get_block_cache_json(parsed_log):
         return "No Block Cache Stats"
 
 
-def get_filter_json(parsed_log):
-    filter_stats = \
-        calc_utils.calc_filter_stats(
-            parsed_log.get_files_monitor(),
-            parsed_log.get_counters_mngr())
-
-    if filter_stats:
-        display_stats = \
-            display_utils.prepare_filter_stats_for_display(filter_stats)
-        return display_stats
-    else:
-        return "No Filter Stats Available"
-
-
 def get_json(parsed_log):
     j = dict()
 
@@ -192,7 +178,6 @@ def get_json(parsed_log):
     j["Seeks"] = get_seeks_json(parsed_log)
     j["Warnings"] = get_warnings_json(parsed_log)
     j["Block-Cache-Stats"] = get_block_cache_json(parsed_log)
-    j["Filter"] = get_filter_json(parsed_log)
 
     return j
 
