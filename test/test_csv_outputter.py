@@ -43,7 +43,7 @@ def test_get_counters_csv():
         counter3 COUNT : 100'''.splitlines()
     ]
 
-    mngr = counters.CountersAndHistogramsMngr()
+    mngr = counters.CountersMngr()
     assert csv_outputter.get_counters_csv(mngr) is None
 
     for entry in counter1_entry_lines:
@@ -83,7 +83,7 @@ def test_get_human_readable_histograms_csv():
         counter3 P50 : 0.500000 P95 : 0.500000 P99 : 0.000000 P100 : 0.000000 COUNT : 12 SUM : 36'''.splitlines(), # noqa
     ]
 
-    mngr = counters.CountersAndHistogramsMngr()
+    mngr = counters.CountersMngr()
     assert csv_outputter.get_counters_csv(mngr) is None
 
     for entry in counter1_entry_lines:

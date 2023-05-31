@@ -24,7 +24,7 @@ import db_files
 import db_options
 import log_file
 import utils
-from counters import CountersAndHistogramsMngr
+from counters import CountersMngr
 from db_options import DatabaseOptions, CfsOptionsDiff, SectionType
 from db_options import SanitizedValueType
 from stats_mngr import CompactionStatsMngr, StatsMngr
@@ -921,7 +921,7 @@ def prepare_filter_stats_for_display(filter_stats):
 
 def prepare_filter_effectiveness_stats_for_display(
         counters_mngr, files_monitor):
-    assert isinstance(counters_mngr, CountersAndHistogramsMngr)
+    assert isinstance(counters_mngr, CountersMngr)
     assert isinstance(files_monitor, db_files.DbFilesMonitor)
 
     filter_stats = calc_utils.calc_filter_stats(files_monitor, counters_mngr)
@@ -933,7 +933,7 @@ def prepare_filter_effectiveness_stats_for_display(
 
 
 def prepare_get_histogram_for_display(counters_mngr):
-    assert isinstance(counters_mngr, CountersAndHistogramsMngr)
+    assert isinstance(counters_mngr, CountersMngr)
 
     get_counter_name = "rocksdb.db.get.micros"
     get_histogram = \
@@ -941,7 +941,7 @@ def prepare_get_histogram_for_display(counters_mngr):
             get_counter_name, non_zero=True)
 
     if get_histogram:
-        return CountersAndHistogramsMngr.\
+        return CountersMngr.\
             get_histogram_entry_display_values(get_histogram)
     else:
         logging.info("No Get latency histogram (maybe no stats)")
@@ -949,7 +949,7 @@ def prepare_get_histogram_for_display(counters_mngr):
 
 
 def prepare_multi_get_histogram_for_display(counters_mngr):
-    assert isinstance(counters_mngr, CountersAndHistogramsMngr)
+    assert isinstance(counters_mngr, CountersMngr)
 
     multi_get_counter_name = "rocksdb.db.multiget.micros"
 
@@ -999,7 +999,7 @@ def prepare_per_cf_read_latency_for_display(
 
 
 def prepare_applicable_read_stats(counters_mngr, stats_mngr, files_monitor):
-    assert isinstance(counters_mngr, CountersAndHistogramsMngr)
+    assert isinstance(counters_mngr, CountersMngr)
     assert isinstance(stats_mngr, StatsMngr)
     assert isinstance(files_monitor, db_files.DbFilesMonitor)
 

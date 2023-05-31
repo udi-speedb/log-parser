@@ -20,7 +20,7 @@ import regexes
 import utils
 from cfs_infos import CfsMetadata
 from compactions import CompactionsMonitor
-from counters import CountersAndHistogramsMngr
+from counters import CountersMngr
 from db_files import DbFilesMonitor
 from db_options import DatabaseOptions
 from events import EventsMngr
@@ -176,7 +176,7 @@ class ParsedLog:
         self.files_monitor = DbFilesMonitor()
         self.warnings_mngr = WarningsMngr()
         self.stats_mngr = StatsMngr()
-        self.counters_mngr = CountersAndHistogramsMngr()
+        self.counters_mngr = CountersMngr()
         self.not_parsed_entries = []
 
         self.parse_metadata()

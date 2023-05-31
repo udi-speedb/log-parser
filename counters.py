@@ -12,7 +12,7 @@ format_line_num_from_line_idx = utils.format_line_num_from_line_idx
 get_line_num_from_entry = utils.get_line_num_from_entry
 
 
-class CountersAndHistogramsMngr:
+class CountersMngr:
     @staticmethod
     def is_start_line(line):
         return re.findall(regexes.STATS_COUNTERS_AND_HISTOGRAMS, line)
@@ -20,13 +20,13 @@ class CountersAndHistogramsMngr:
     @staticmethod
     def is_your_entry(entry):
         entry_lines = entry.get_msg_lines()
-        return CountersAndHistogramsMngr.is_start_line(entry_lines[0])
+        return CountersMngr.is_start_line(entry_lines[0])
 
     def try_adding_entries(self, log_entries, start_entry_idx):
         entry_idx = start_entry_idx
         entry = log_entries[entry_idx]
 
-        if not CountersAndHistogramsMngr.is_your_entry(entry):
+        if not CountersMngr.is_your_entry(entry):
             return False, entry_idx
 
         try:
@@ -50,7 +50,7 @@ class CountersAndHistogramsMngr:
     def add_entry(self, entry):
         time = entry.get_time()
         lines = entry.get_msg_lines()
-        assert CountersAndHistogramsMngr.is_start_line(lines[0])
+        assert CountersMngr.is_start_line(lines[0])
 
         logging.debug(f"Parsing Counter and Histograms Entry ("
                       f"{format_line_num_from_entry(entry)}")
@@ -257,7 +257,7 @@ class CountersAndHistogramsMngr:
             return {}
         last_entry = entries[-1]
         is_zero_entry_func = \
-            CountersAndHistogramsMngr.is_histogram_entry_count_zero
+            CountersMngr.is_histogram_entry_count_zero
         if non_zero and is_zero_entry_func(last_entry):
             return {}
 

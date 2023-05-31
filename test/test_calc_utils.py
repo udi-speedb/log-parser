@@ -17,7 +17,7 @@ from dataclasses import dataclass
 import calc_utils
 import test.testing_utils as test_utils
 import utils
-from counters import CountersAndHistogramsMngr
+from counters import CountersMngr
 from stats_mngr import CfFileHistogramStatsMngr
 from test.sample_log_info import SampleLogInfo
 
@@ -196,7 +196,7 @@ def test_get_applicable_seek_stats():
     start_plus_20_seek_entry = \
         get_seek_counter_and_histogram_entry(start_plus_20_seek_stats)
 
-    mngr = CountersAndHistogramsMngr()
+    mngr = CountersMngr()
     assert get_seek_stats(mngr) is None
 
     assert mngr.try_adding_entries(start_entry, 0) == (True, 1)

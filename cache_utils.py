@@ -2,7 +2,7 @@ import logging
 from dataclasses import dataclass
 
 import db_files
-from counters import CountersAndHistogramsMngr
+from counters import CountersMngr
 from db_files import DbFilesMonitor
 from db_options import RAW_NULL_PTR, DatabaseOptions, \
     sanitized_to_raw_ptr_value
@@ -153,7 +153,7 @@ class CacheCounters:
 
 
 def collect_cache_counters(counters_mngr):
-    assert isinstance(counters_mngr, CountersAndHistogramsMngr)
+    assert isinstance(counters_mngr, CountersMngr)
 
     if not counters_mngr.does_have_counters_values():
         logging.info("Can't collect cache counters. No counters available")
@@ -195,7 +195,7 @@ class CacheStats:
 def calc_block_cache_stats(db_options: object, counters_mngr,
                            files_monitor) -> object:
     assert isinstance(db_options, DatabaseOptions)
-    assert isinstance(counters_mngr, CountersAndHistogramsMngr)
+    assert isinstance(counters_mngr, CountersMngr)
     assert isinstance(files_monitor, DbFilesMonitor)
 
     stats = CacheStats()

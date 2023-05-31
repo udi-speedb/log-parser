@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 
 import db_files
 import utils
-from counters import CountersAndHistogramsMngr
+from counters import CountersMngr
 from events import EventType
 from events import FlowType, MatchingEventInfo, EventsMngr
 from log_file import ParsedLog
@@ -885,7 +885,7 @@ class FilterCounters:
 
 
 def collect_filter_counters(counters_mngr):
-    assert isinstance(counters_mngr, CountersAndHistogramsMngr)
+    assert isinstance(counters_mngr, CountersMngr)
 
     if not counters_mngr.does_have_counters_values():
         logging.info("Can't collect Filter counters. No counters available")
@@ -925,7 +925,7 @@ class FilterStats:
 
 def calc_filter_stats(files_monitor, counters_mngr):
     assert isinstance(files_monitor, db_files.DbFilesMonitor)
-    assert isinstance(counters_mngr, CountersAndHistogramsMngr)
+    assert isinstance(counters_mngr, CountersMngr)
 
     stats = FilterStats()
     files_filter_stats = calc_files_filter_stats(files_monitor)
