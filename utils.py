@@ -126,6 +126,20 @@ def replace_key_keep_order(d, existing_key, new_key):
     return updated_d
 
 
+def are_dicts_equal_and_in_same_keys_order(d1, d2):
+    if d1 != d2:
+        return False
+    return list(d1.keys()) == list(d2.keys())
+
+
+def unify_lists_preserve_order(l1, l2):
+    # Unifies the lists, removes duplicates, but maintains the order
+    unified_with_duplicates = l1 + l2
+    seen = set()
+    return [x for x in unified_with_duplicates
+            if not (x in seen or seen.add(x))]
+
+
 def has_method(obj, method_name):
     """ Checks if a method exists in an obj """
     return method_name in dir(obj)

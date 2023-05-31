@@ -700,68 +700,82 @@ def test_get_cfs_options_diff():
     assert db_opts.DatabaseOptions.\
            get_cfs_options_diff(new, cf3, new, cf3) is None
 
+    def compare_cf_actual_and_expected_diffs(actual_diff, expected_diff_dict):
+        assert isinstance(actual_diff, db_opts.CfsOptionsDiff)
+        assert isinstance(expected_diff_dict, dict)
+
+        assert actual_diff == expected_diff_dict
+        assert utils.are_dicts_equal_and_in_same_keys_order(
+            actual_diff.diff_dict, expected_diff)
+
     expected_diff = {
+        'CFOptions.write_buffer_size': ('1024000', '128000000'),
         db_opts.CfsOptionsDiff.CF_NAMES_KEY:
             {"Base": default,
-             "New": default},
-        'CFOptions.write_buffer_size': ('1024000', '128000000')
+             "New": default}
     }
 
-    assert db_opts.DatabaseOptions.\
-           get_cfs_options_diff(baseline, default, new, default) == \
-           expected_diff
+    actual_diff = db_opts.DatabaseOptions.\
+        get_cfs_options_diff(baseline, default, new, default)
+    compare_cf_actual_and_expected_diffs(actual_diff, expected_diff)
 
     expected_diff = {
-        db_opts.CfsOptionsDiff.CF_NAMES_KEY:
-            {"Base": default,
-             "New": cf1},
         'CFOptions.write_buffer_size': ('1024000', '128000'),
-        'TableOptions.BlockBasedTable.checksum':
-            (db_opts.SANITIZED_NO_VALUE, 'True'),
         'TableOptions.BlockBasedTable.format_version':
             (db_opts.SANITIZED_NO_VALUE, '5'),
         'TableOptions.BlockBasedTable.block_size':
-            (db_opts.SANITIZED_NO_VALUE, '4096')
+            (db_opts.SANITIZED_NO_VALUE, '4096'),
+        'TableOptions.BlockBasedTable.checksum':
+            (db_opts.SANITIZED_NO_VALUE, 'True'),
+        db_opts.CfsOptionsDiff.CF_NAMES_KEY:
+            {"Base": default,
+             "New": cf1}
     }
-    assert db_opts.DatabaseOptions.\
-           get_cfs_options_diff(baseline, default, new, cf1) == expected_diff
+
+    actual_diff = db_opts.DatabaseOptions.\
+        get_cfs_options_diff(baseline, default, new, cf1)
+    compare_cf_actual_and_expected_diffs(actual_diff, expected_diff)
 
     expected_diff = {
-        db_opts.CfsOptionsDiff.CF_NAMES_KEY:
-            {"Base": cf1,
-             "New": default},
         'CFOptions.write_buffer_size': ('128000', '1024000'),
         'TableOptions.BlockBasedTable.checksum':
             ('True', db_opts.SANITIZED_NO_VALUE),
         'TableOptions.BlockBasedTable.format_version':
             ('5', db_opts.SANITIZED_NO_VALUE),
         'TableOptions.BlockBasedTable.block_size':
-            ('4096', db_opts.SANITIZED_NO_VALUE)
+            ('4096', db_opts.SANITIZED_NO_VALUE),
+        db_opts.CfsOptionsDiff.CF_NAMES_KEY:
+            {"Base": cf1,
+             "New": default}
     }
-    assert db_opts.DatabaseOptions.\
-           get_cfs_options_diff(new, cf1, baseline, default) == expected_diff
+
+    actual_diff = db_opts.DatabaseOptions. \
+        get_cfs_options_diff(new, cf1, baseline, default)
+    compare_cf_actual_and_expected_diffs(actual_diff, expected_diff)
 
     expected_diff = {
-        db_opts.CfsOptionsDiff.CF_NAMES_KEY:
-            {"Base": cf2,
-             "New": cf2},
         'CFOptions.write_buffer_size':
             ('128000000', db_opts.SANITIZED_NO_VALUE),
         'TableOptions.BlockBasedTable.index_type':
             ('1', db_opts.SANITIZED_NO_VALUE),
-
+        db_opts.CfsOptionsDiff.CF_NAMES_KEY:
+            {"Base": cf2,
+             "New": cf2},
     }
-    assert db_opts.DatabaseOptions.\
-           get_cfs_options_diff(baseline, cf2, new, cf2) == expected_diff
+    actual_diff = db_opts.DatabaseOptions.\
+        get_cfs_options_diff(baseline, cf2, new, cf2)
+    compare_cf_actual_and_expected_diffs(actual_diff, expected_diff)
 
     expected_diff = {
+        'CFOptions.write_buffer_size':
+            (db_opts.SANITIZED_NO_VALUE, '128000000'),
         db_opts.CfsOptionsDiff.CF_NAMES_KEY:
             {"Base": cf3,
-             "New": cf3},
-        'CFOptions.write_buffer_size':
-            (db_opts.SANITIZED_NO_VALUE, '128000000')}
-    assert db_opts.DatabaseOptions.\
-           get_cfs_options_diff(baseline, cf3, new, cf3) == expected_diff
+             "New": cf3}
+    }
+    actual_diff = db_opts.DatabaseOptions.\
+        get_cfs_options_diff(baseline, cf3, new, cf3)
+    compare_cf_actual_and_expected_diffs(actual_diff, expected_diff)
 
 
 def test_get_unified_cfs_diffs():

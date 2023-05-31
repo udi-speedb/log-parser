@@ -861,8 +861,12 @@ class DatabaseOptions:
         diff = CfsOptionsDiff(baseline_opts_dict, baseline_cf_name,
                               new_opts_dict, new_cf_name)
 
-        options_union = set(baseline_opts_dict.keys()).union(
-            set(new_opts_dict.keys()))
+        # Unify the names of the options in both, remove the duplicates, but
+        # preserve the order of the options
+        baseline_keys_list = list(baseline_opts_dict.keys())
+        new_keys_list = list(new_opts_dict.keys())
+        options_union = \
+            utils.unify_lists_preserve_order(baseline_keys_list, new_keys_list)
 
         for full_option_name in options_union:
             # if option in options_union, then it must be in one of the configs
