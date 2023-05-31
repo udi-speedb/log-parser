@@ -849,15 +849,12 @@ class CfFilterFilesStats:
 def calc_files_filter_stats(files_monitor):
     assert isinstance(files_monitor, db_files.DbFilesMonitor)
 
-    stats = {}
+    stats = dict()
     for cf_name in files_monitor.get_cfs_names():
         cf_filter_files_stats = \
             db_files.calc_cf_files_stats([cf_name], files_monitor)
         assert isinstance(cf_filter_files_stats, db_files.CfsFilesStats)
 
-        # if not cf_filter_files_stats.cfs_filter_specific[cf_name].\
-        #         filter_policy:
-        #     logging.info(f"No files filter policy for {cf_name}")
         filter_policy = \
             cf_filter_files_stats.cfs_filter_specific[cf_name].filter_policy
         max_filter_size_bytes = cf_filter_files_stats.filter.max_size_bytes

@@ -281,9 +281,13 @@ def prepare_general_cf_info_for_display(parsed_log):
                     SanitizedValueType.NULL_PTR:
                 cf_display_info["Filter-Policy"] = \
                     cf_options['filter_policy'][cf_name]
-                if cf_name in filter_stats.files_filter_stats:
-                    avg_bpk = filter_stats.files_filter_stats[cf_name].avg_bpk
-                    cf_display_info["Filter-Policy"] += f" ({avg_bpk:.1f} bpk)"
+                bpk_str = " (unknown bpk)"
+                if filter_stats.files_filter_stats:
+                    if cf_name in filter_stats.files_filter_stats:
+                        avg_bpk = \
+                            filter_stats.files_filter_stats[cf_name].avg_bpk
+                        bpk_str = f" ({avg_bpk:.1f} bpk)"
+                cf_display_info["Filter-Policy"] += bpk_str
             else:
                 cf_display_info["Filter-Policy"] = "No Filter"
         else:
