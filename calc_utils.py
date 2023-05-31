@@ -296,6 +296,8 @@ def get_db_wide_info(parsed_log: ParsedLog):
     metadata = parsed_log.get_metadata()
     warns_mngr = parsed_log.get_warnings_mngr()
     stats_mngr = parsed_log.get_stats_mngr()
+    db_wide_stats_mngr = stats_mngr.get_db_wide_stats_mngr()
+
     user_opers_stats = get_user_operations_stats(
         parsed_log.get_counters_mngr())
     assert isinstance(user_opers_stats, UserOpersStats)
@@ -348,6 +350,8 @@ def get_db_wide_info(parsed_log: ParsedLog):
     db_size_bytes_info = get_db_size_bytes_info_at_end(compactions_stats_mngr)
     assert isinstance(db_size_bytes_info, DbSizeBytesInfo)
 
+    ingest_info = get_db_ingest_info(db_wide_stats_mngr)
+
     info = {
         "creator": metadata.get_product_name(),
         "version": metadata.get_version(),
@@ -363,7 +367,8 @@ def get_db_wide_info(parsed_log: ParsedLog):
         "total_num_table_created_entries": total_num_table_created_entries,
         "num_keys_written": num_keys_written,
         "user_opers_stats": user_opers_stats,
-        "delete_opers_stats": delete_opers_stats
+        "delete_opers_stats": delete_opers_stats,
+        "ingest_info": ingest_info
     }
 
     return info

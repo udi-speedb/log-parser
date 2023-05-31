@@ -85,12 +85,27 @@ def print_general_info(f, parsed_log: ParsedLog):
     db_size_time = display_general_info_dict["DB Size Time"]
     del display_general_info_dict["DB Size Time"]
 
+    ingest_time = display_general_info_dict["Ingest Time"]
+
+    suffix = "*"
+    if db_size_time != ingest_time:
+        suffix += "*"
+    display_general_info_dict = \
+        utils.replace_key_keep_order(
+            display_general_info_dict, "Ingest", f"Ingest ({suffix})")
+    del display_general_info_dict["Ingest Time"]
+
     width = 25
     for field_name, value in display_general_info_dict.items():
         print(f"{field_name.ljust(width)}: {value}", file=f)
     print_cf_console_printout(f, parsed_log)
 
-    print(f"(*) DB / CF-s Size Time is calculated at: {db_size_time}", file=f)
+    if db_size_time != ingest_time:
+        print(f"(*) DB / CF-s Size Time is calculated at: "
+              f"{db_size_time}", file=f)
+        print(f"(**) Ingest Time is calculated at: {ingest_time}", file=f)
+    else:
+        print(f"(*) Info-s Time is calculated at: {db_size_time}", file=f)
 
 
 def get_console_output(log_file_path, parsed_log, output_type):

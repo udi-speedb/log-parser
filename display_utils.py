@@ -48,7 +48,7 @@ def format_value(value, suffix=None, conv_func=None):
 
 
 def prepare_db_wide_user_opers_stats_for_display(db_wide_info):
-    display_info = {}
+    display_info = dict()
 
     def get_disp_value(percent, num, total_num, oper_name,
                        unavailability_reason):
@@ -166,6 +166,21 @@ def prepare_error_or_fatal_warnings_for_display(warnings_mngr, prepare_error):
     return {time: msg for time, msg in warnings_tuples}
 
 
+def prepare_ingest_info_for_db_wide_info_display(db_wide_info):
+    ingest_info = db_wide_info["ingest_info"]
+    assert isinstance(ingest_info, calc_utils.DbIngestInfo)
+
+    if ingest_info:
+        return prepare_db_ingest_info_for_display(ingest_info)
+    else:
+        unavailability_reason = "No Ingest Info Available"
+        return {
+            "Ingest": unavailability_reason,
+            "Ingest Rate": unavailability_reason,
+            "Ingest Time": None
+        }
+
+
 def prepare_db_wide_info_for_display(parsed_log):
     log_file_time_info = calc_utils.get_log_file_time_info(parsed_log)
     assert isinstance(log_file_time_info, calc_utils.LogFileTimeInfo)
@@ -206,9 +221,13 @@ def prepare_db_wide_info_for_display(parsed_log):
     else:
         display_info["Fatal Messages"] = "No Fatal Messages"
 
+    display_info.update(
+        prepare_ingest_info_for_db_wide_info_display(db_wide_info))
+
     display_info.update(db_wide_notable_entities)
-    display_info.update(prepare_db_wide_user_opers_stats_for_display(
-        db_wide_info))
+    display_info.update(
+        prepare_db_wide_user_opers_stats_for_display(db_wide_info))
+
     display_info['Num CF-s'] = db_wide_info['num_cfs']
 
     return display_info
@@ -724,12 +743,15 @@ def prepare_cfs_size_bytes_growth_for_display(growth):
 
 
 def prepare_db_ingest_info_for_display(ingest_info):
+    assert isinstance(ingest_info, calc_utils.DbIngestInfo)
+
     disp = {}
     if not ingest_info:
         return "No Ingest Info"
 
-    disp["ingest"] = utils.get_human_readable_num_bytes(ingest_info.ingest)
-    disp["ingest-rate"] = f"{ingest_info.ingest_rate_mbps} MBps"
+    disp["Ingest"] = utils.get_human_readable_num_bytes(ingest_info.ingest)
+    disp["Ingest Rate"] = f"{ingest_info.ingest_rate_mbps} MBps"
+    disp["Ingest Time"] = ingest_info.time
 
     return disp
 
