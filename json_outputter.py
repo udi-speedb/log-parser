@@ -79,11 +79,11 @@ def get_compactions_json(parsed_log):
 
 def get_reads_json(parsed_log):
     stats_mngr = parsed_log.get_stats_mngr()
-    counters_and_histograms_mngr = \
-        parsed_log.get_counters_and_histograms_mngr()
+    counters_mngr = \
+        parsed_log.get_counters_mngr()
     read_stats = \
         display_utils.\
-        prepare_applicable_read_stats(counters_and_histograms_mngr,
+        prepare_applicable_read_stats(counters_mngr,
                                       stats_mngr)
     if read_stats:
         return read_stats
@@ -92,10 +92,10 @@ def get_reads_json(parsed_log):
 
 
 def get_seeks_json(parsed_log):
-    counters_and_histograms_mngr = \
-        parsed_log.get_counters_and_histograms_mngr()
+    counters_mngr = \
+        parsed_log.get_counters_mngr()
     seek_stats = calc_utils.get_applicable_seek_stats(
-        counters_and_histograms_mngr)
+        counters_mngr)
     if seek_stats:
         disp_dict = display_utils.prepare_seek_stats_for_display(seek_stats)
         return disp_dict
@@ -138,7 +138,7 @@ def get_block_cache_json(parsed_log):
     cache_stats = \
         cache_utils.calc_block_cache_stats(
             parsed_log.get_database_options(),
-            parsed_log.get_counters_and_histograms_mngr(),
+            parsed_log.get_counters_mngr(),
             parsed_log.get_files_monitor())
     if cache_stats:
         stats_mngr = parsed_log.get_stats_mngr()
@@ -157,7 +157,7 @@ def get_filter_json(parsed_log):
     filter_stats = \
         calc_utils.calc_filter_stats(
             parsed_log.get_files_monitor(),
-            parsed_log.get_counters_and_histograms_mngr())
+            parsed_log.get_counters_mngr())
 
     if filter_stats:
         display_stats = \

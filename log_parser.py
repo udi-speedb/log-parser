@@ -231,13 +231,13 @@ def generate_csvs_if_applicable(parsed_log, output_folder, report_to_console):
     stats_mngr = parsed_log.get_stats_mngr()
     compactions_monitor = parsed_log.get_compactions_monitor()
 
-    counters_and_histograms_mngr = \
-        parsed_log.get_counters_and_histograms_mngr()
+    counters_mngr = \
+        parsed_log.get_counters_mngr()
     counters_csv_path = csv_outputter.generate_counters_csv(
-        counters_and_histograms_mngr, output_folder, report_to_console)
+        counters_mngr, output_folder, report_to_console)
     human_readable_histograms_csv_file_path, tools_histograms_csv_file_path = \
         csv_outputter.generate_histograms_csv(
-            counters_and_histograms_mngr, output_folder, report_to_console)
+            counters_mngr, output_folder, report_to_console)
 
     compaction_stats_mngr = stats_mngr.get_compactions_stats_mngr()
     compactions_stats_csv_path = csv_outputter.generate_compactions_stats_csv(

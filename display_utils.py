@@ -50,29 +50,47 @@ def format_value(value, suffix=None, conv_func=None):
 def prepare_db_wide_user_opers_stats_for_display(db_wide_info):
     display_info = {}
 
-    total_num_user_opers = db_wide_info["total_num_user_opers"]
-    total_num_flushed_entries = db_wide_info['total_num_flushed_entries']
+    def get_disp_value(percent, num, total_num, oper_name,
+                       unavailability_reason):
+        if unavailability_reason is None:
+            assert total_num is not None
+            if total_num > 0 and num > 0:
+                return f"{percent:.1f}% ({num}/{total_num})"
+            else:
+                return f"0 (No {oper_name} Operations)"
+        else:
+            return f"Unavailable ({unavailability_reason})"
 
-    if total_num_user_opers > 0:
-        display_info['Writes'] = \
-            f"{db_wide_info['percent_written']} " \
-            f"({db_wide_info['num_written']}/{total_num_user_opers})"
-        display_info['Reads'] = \
-            f"{db_wide_info['percent_read']} " \
-            f"({db_wide_info['num_read']}/{total_num_user_opers})"
-        display_info['Seeks'] = \
-            f"{db_wide_info['percent_seek']} " \
-            f"({db_wide_info['num_seek']}/{total_num_user_opers})"
-    else:
-        display_info['Writes'] = "Not Available"
-        display_info['Reads'] = "Not Available"
-        display_info['Seeks'] = "Not Available"
+    user_opers_stats = db_wide_info["user_opers_stats"]
+    assert isinstance(user_opers_stats, calc_utils.UserOpersStats)
 
-    if total_num_flushed_entries > 0:
-        display_info['Deletes'] = \
-            f"{db_wide_info['total_percent_deletes']} " \
-            f"({db_wide_info['total_num_deletes']}/" \
-            f"{total_num_flushed_entries})"
+    total_num_user_opers = user_opers_stats.total_num_user_opers
+    reason = user_opers_stats.unavailability_reason
+    display_info['Writes'] = \
+        get_disp_value(user_opers_stats.percent_written,
+                       user_opers_stats.num_written,
+                       total_num_user_opers,
+                       "Write", reason)
+    display_info['Reads'] = \
+        get_disp_value(user_opers_stats.percent_read,
+                       user_opers_stats.num_read,
+                       total_num_user_opers,
+                       "Read", reason)
+    display_info['Seeks'] = \
+        get_disp_value(user_opers_stats.percent_seek,
+                       user_opers_stats.num_seek,
+                       total_num_user_opers,
+                       "Seek", reason)
+
+    delete_opers_stats = db_wide_info["delete_opers_stats"]
+    assert isinstance(delete_opers_stats, calc_utils.DeleteOpersStats)
+
+    display_info['Num Entries Deleted'] = \
+        get_disp_value(delete_opers_stats.total_percent_deletes,
+                       delete_opers_stats.total_num_deletes,
+                       delete_opers_stats.total_num_flushed_entries,
+                       "Delete",
+                       delete_opers_stats.unavailability_reason)
 
     return display_info
 
@@ -200,7 +218,7 @@ def prepare_general_cf_info_for_display(parsed_log):
     filter_stats = \
         calc_utils.calc_filter_stats(
             parsed_log.get_files_monitor(),
-            parsed_log.get_counters_and_histograms_mngr())
+            parsed_log.get_counters_mngr())
 
     display_info = {}
 

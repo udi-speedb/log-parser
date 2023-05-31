@@ -176,7 +176,7 @@ class ParsedLog:
         self.files_monitor = DbFilesMonitor()
         self.warnings_mngr = WarningsMngr()
         self.stats_mngr = StatsMngr()
-        self.counters_and_histograms_mngr = CountersAndHistogramsMngr()
+        self.counters_mngr = CountersAndHistogramsMngr()
         self.not_parsed_entries = []
 
         self.parse_metadata()
@@ -424,7 +424,7 @@ class ParsedLog:
 
     def try_parse_as_counters_stats_entries(self):
         result, self.entry_idx = \
-            self.counters_and_histograms_mngr.try_adding_entries(
+            self.counters_mngr.try_adding_entries(
                 self.log_entries, self.entry_idx)
 
         return result
@@ -541,8 +541,8 @@ class ParsedLog:
     def get_stats_mngr(self):
         return self.stats_mngr
 
-    def get_counters_and_histograms_mngr(self):
-        return self.counters_and_histograms_mngr
+    def get_counters_mngr(self):
+        return self.counters_mngr
 
     def get_files_monitor(self):
         return self.files_monitor

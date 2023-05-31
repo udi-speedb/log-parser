@@ -15,10 +15,10 @@
 import counters
 import csv_outputter
 from test.testing_utils import \
-    add_stats_entry_lines_to_counters_and_histograms_mngr
+    add_stats_entry_lines_to_counters_mngr
 
 add_stats_entry_lines_to_mngr = \
-    add_stats_entry_lines_to_counters_and_histograms_mngr
+    add_stats_entry_lines_to_counters_mngr
 
 
 def test_get_counters_csv():

@@ -53,7 +53,7 @@ def lines_to_entries(lines):
     return entries
 
 
-def add_stats_entry_lines_to_counters_and_histograms_mngr(entry_lines, mngr):
+def add_stats_entry_lines_to_counters_mngr(entry_lines, mngr):
     entry = LogEntry(0, entry_lines[0])
     for line in entry_lines[1:]:
         entry.add_line(line)

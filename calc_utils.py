@@ -21,7 +21,7 @@ import db_files
 import utils
 from counters import CountersAndHistogramsMngr
 from events import EventType
-from events import FlowType, MatchingEventInfo
+from events import FlowType, MatchingEventInfo, EventsMngr
 from log_file import ParsedLog
 from stats_mngr import CompactionStatsMngr, CfFileHistogramStatsMngr, \
     DbWideStatsMngr
@@ -157,53 +157,100 @@ def calc_cf_table_creation_stats(cf_name, events_mngr):
             "avg_value_size": avg_value_size}
 
 
-def calc_flush_started_stats(cf_name, events_mngr):
+@dataclass
+class DeleteOpersStats:
+    total_num_flushed_entries: int = None
+    total_num_deletes: int = None
+    total_percent_deletes: float = None
+    unavailability_reason: str = None
+
+
+def calc_cf_delete_opers_stats(cf_name, events_mngr):
     flush_started_events = \
         events_mngr.get_cf_events_by_type(cf_name,
                                           EventType.FLUSH_STARTED)
 
-    total_num_entries = 0
-    total_num_deletes = 0
+    if not flush_started_events:
+        return DeleteOpersStats(
+            unavailability_reason="No Flush Started Events")
+
+    stats = DeleteOpersStats(total_num_flushed_entries=0, total_num_deletes=0)
+
     for flush_event in flush_started_events:
-        total_num_entries += flush_event.get_num_entries()
-        total_num_deletes += flush_event.get_num_deletes()
+        stats.total_num_flushed_entries += flush_event.get_num_entries()
+        stats.total_num_deletes += flush_event.get_num_deletes()
 
-    # TODO - Consider setting as -1 / illegal value to indicate no value
-    percent_deletes = 0
-    if total_num_entries > 0:
-        percent_deletes = \
-            f'{total_num_deletes / total_num_entries * 100:.1f}%'
-
-    return {"total_num_entries": total_num_entries,
-            "total_num_deletes": total_num_deletes,
-            "percent_deletes": percent_deletes}
+    return stats
 
 
-def get_user_operations_stats(counters_and_histograms_mngr):
-    # TODO - Handle the case where stats aren't availabe
-    mngr = counters_and_histograms_mngr
-    num_written = mngr.get_last_counter_value("rocksdb.number.keys.written")
-    num_read = mngr.get_last_counter_value("rocksdb.number.keys.read")
-    num_seek = mngr.get_last_counter_value("rocksdb.number.db.seek")
-    total_num_user_opers = num_written + num_read + num_seek
+def calc_delete_opers_stats(cfs_names, events_mngr):
+    assert cfs_names
+    assert isinstance(events_mngr, EventsMngr)
 
-    percent_written = 0
-    percent_read = 0
-    percent_seek = 0
-    if total_num_user_opers > 0:
-        percent_written = f'{num_written / total_num_user_opers * 100:.1f}%'
-        percent_read = f'{num_read / total_num_user_opers * 100:.1f}%'
-        percent_seek = f'{num_seek / total_num_user_opers * 100:.1f}%'
+    stats = DeleteOpersStats(total_num_flushed_entries=0, total_num_deletes=0)
 
-    return {
-        "num_written": num_written,
-        "num_read": num_read,
-        "num_seek": num_seek,
-        "total_num_user_opers": total_num_user_opers,
-        "percent_written": percent_written,
-        "percent_read": percent_read,
-        "percent_seek": percent_seek
-    }
+    has_any_data = False
+    unavailability_reason = None
+    for cf_name in cfs_names:
+        cf_stats = calc_cf_delete_opers_stats(cf_name, events_mngr)
+        assert isinstance(cf_stats, DeleteOpersStats)
+
+    if cf_stats.total_num_flushed_entries:
+        has_any_data = True
+        stats.total_num_flushed_entries += cf_stats.total_num_flushed_entries
+
+        assert cf_stats.total_num_deletes is not None
+        stats.total_num_deletes += cf_stats.total_num_deletes
+    else:
+        # arbitrarily use the first reason for all
+        assert cf_stats.unavailability_reason is not None
+        unavailability_reason = cf_stats.unavailability_reason
+
+    if not has_any_data:
+        return DeleteOpersStats(unavailability_reason=unavailability_reason)
+
+    if stats.total_num_flushed_entries > 0:
+        stats.total_percent_deletes = \
+            float(100 * stats.total_num_deletes /
+                  stats.total_num_flushed_entries)
+
+    return stats
+
+
+@dataclass
+class UserOpersStats:
+    num_written: int = None
+    num_read: int = None
+    num_seek: int = None
+    total_num_user_opers: int = None
+    percent_written: float = None
+    percent_read: float = None
+    percent_seek: float = None
+    unavailability_reason: str = None
+
+
+def get_user_operations_stats(counters_mngr):
+    if not counters_mngr.does_have_counters_values():
+        return UserOpersStats(unavailability_reason="No Stats Available")
+
+    stats = UserOpersStats()
+    mngr = counters_mngr
+    stats.num_written = \
+        mngr.get_last_counter_value("rocksdb.number.keys.written")
+    stats.num_read = mngr.get_last_counter_value("rocksdb.number.keys.read")
+    stats.num_seek = mngr.get_last_counter_value("rocksdb.number.db.seek")
+    stats.total_num_user_opers = \
+        stats.num_written + stats.num_read + stats.num_seek
+
+    if stats.total_num_user_opers > 0:
+        stats.percent_written = float(100 * stats.num_written /
+                                      stats.total_num_user_opers)
+        stats.percent_read = float(100 * stats.num_read /
+                                   stats.total_num_user_opers)
+        stats.percent_seek = float(100 * stats.num_seek /
+                                   stats.total_num_user_opers)
+
+    return stats
 
 
 @dataclass
@@ -249,8 +296,10 @@ def get_db_wide_info(parsed_log: ParsedLog):
     metadata = parsed_log.get_metadata()
     warns_mngr = parsed_log.get_warnings_mngr()
     stats_mngr = parsed_log.get_stats_mngr()
-    user_operations_stats = get_user_operations_stats(
-        parsed_log.get_counters_and_histograms_mngr())
+    user_opers_stats = get_user_operations_stats(
+        parsed_log.get_counters_mngr())
+    assert isinstance(user_opers_stats, UserOpersStats)
+
     cumulative_writes_stats_dict = \
         stats_mngr.get_db_wide_stats_mngr(). \
         get_last_cumulative_writes_entry()
@@ -259,15 +308,22 @@ def get_db_wide_info(parsed_log: ParsedLog):
     if cumulative_writes_stats_dict:
         _, cumulative_writes_stats = \
             utils.get_first_dict_entry_components(cumulative_writes_stats_dict)
-        num_keys_written = max(user_operations_stats["num_written"],
-                               cumulative_writes_stats.num_keys)
+        if user_opers_stats.num_written:
+            num_keys_written = max(user_opers_stats.num_written,
+                                   cumulative_writes_stats.num_keys)
+        else:
+            num_keys_written = cumulative_writes_stats.num_keys
+
     total_num_table_created_entries = 0
-    total_num_flushed_entries = 0
-    total_num_deletes = 0
     total_keys_sizes = 0
     total_values_size = 0
 
+    cfs_names = parsed_log.get_cfs_names()
     events_mngr = parsed_log.get_events_mngr()
+
+    delete_opers_stats = calc_delete_opers_stats(cfs_names, events_mngr)
+    assert isinstance(delete_opers_stats, DeleteOpersStats)
+
     for cf_name in parsed_log.get_cfs_names():
         table_creation_stats = calc_cf_table_creation_stats(cf_name,
                                                             events_mngr)
@@ -275,15 +331,6 @@ def get_db_wide_info(parsed_log: ParsedLog):
             table_creation_stats["total_num_entries"]
         total_keys_sizes += table_creation_stats["total_keys_sizes"]
         total_values_size += table_creation_stats["total_values_sizes"]
-
-        flush_started_stats = calc_flush_started_stats(cf_name, events_mngr)
-        total_num_flushed_entries += flush_started_stats['total_num_entries']
-        total_num_deletes += flush_started_stats['total_num_deletes']
-
-    total_percent_deletes = 0
-    if total_num_flushed_entries > 0:
-        total_percent_deletes = \
-            f'{total_num_deletes / total_num_flushed_entries * 100:.1f}%'
 
     # TODO - Add unit test when total_num_table_created_entries == 0
     # TODO - Consider whether this means data is not available
@@ -314,12 +361,10 @@ def get_db_wide_info(parsed_log: ParsedLog):
         "errors": get_error_warnings(warns_mngr),
         "fatals": get_fatal_warnings(warns_mngr),
         "total_num_table_created_entries": total_num_table_created_entries,
-        "total_num_flushed_entries": total_num_flushed_entries,
-        "total_num_deletes": total_num_deletes,
-        "total_percent_deletes": total_percent_deletes,
-        "num_keys_written": num_keys_written
+        "num_keys_written": num_keys_written,
+        "user_opers_stats": user_opers_stats,
+        "delete_opers_stats": delete_opers_stats
     }
-    info.update(user_operations_stats)
 
     return info
 
@@ -708,7 +753,7 @@ class SeekStats:
     avg_seek_latency_us: float = 0.0
 
 
-def get_applicable_seek_stats(counters_and_histograms_mngr):
+def get_applicable_seek_stats(counters_mngr):
     # The names of the counters in the stats dump in the log
     prefix = 'rocksdb.number.db'
     seek_name = f"{prefix}.seek"
@@ -717,7 +762,7 @@ def get_applicable_seek_stats(counters_and_histograms_mngr):
     seek_prev_name = f"{prefix}.prev"
     seek_latency_hist_us = "rocksdb.db.seek.micros"
 
-    mngr = counters_and_histograms_mngr
+    mngr = counters_mngr
 
     # First see if there are any seeks recorded
     last_seek_entry = mngr.get_last_counter_entry(seek_name)
@@ -835,7 +880,7 @@ class FilterCounters:
 def collect_filter_counters(counters_mngr):
     assert isinstance(counters_mngr, CountersAndHistogramsMngr)
 
-    if not counters_mngr.does_have_values():
+    if not counters_mngr.does_have_counters_values():
         logging.info("Can't collect Filter counters. No counters available")
         return None
 

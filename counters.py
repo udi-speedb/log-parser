@@ -160,8 +160,11 @@ class CountersAndHistogramsMngr:
 
         return True
 
-    def does_have_values(self):
+    def does_have_counters_values(self):
         return self.counters != {}
+
+    def does_have_histograms_values(self):
+        return self.histograms != {}
 
     def get_counters_names(self):
         return self.counters_names
@@ -206,11 +209,11 @@ class CountersAndHistogramsMngr:
             return {}
         return entries[0]
 
-    def get_first_counter_value(self, counter_name):
+    def get_first_counter_value(self, counter_name, default=0):
         last_entry = self.get_first_counter_entry(counter_name)
 
         if not last_entry:
-            return 0
+            return default
 
         return last_entry["value"]
 
@@ -220,11 +223,11 @@ class CountersAndHistogramsMngr:
             return {}
         return entries[-1]
 
-    def get_last_counter_value(self, counter_name):
+    def get_last_counter_value(self, counter_name, default=0):
         last_entry = self.get_last_counter_entry(counter_name)
 
         if not last_entry:
-            return 0
+            return default
 
         return last_entry["value"]
 

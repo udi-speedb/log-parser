@@ -155,7 +155,7 @@ class CacheCounters:
 def collect_cache_counters(counters_mngr):
     assert isinstance(counters_mngr, CountersAndHistogramsMngr)
 
-    if not counters_mngr.does_have_values():
+    if not counters_mngr.does_have_counters_values():
         logging.info("Can't collect cache counters. No counters available")
         return None
 
