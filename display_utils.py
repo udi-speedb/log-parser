@@ -85,7 +85,7 @@ def prepare_db_wide_user_opers_stats_for_display(db_wide_info):
     delete_opers_stats = db_wide_info["delete_opers_stats"]
     assert isinstance(delete_opers_stats, calc_utils.DeleteOpersStats)
 
-    display_info['Num Entries Deleted'] = \
+    display_info['Deleted (Flushed) Entries'] = \
         get_disp_value(delete_opers_stats.total_percent_deletes,
                        delete_opers_stats.total_num_deletes,
                        delete_opers_stats.total_num_flushed_entries,
@@ -970,9 +970,10 @@ def prepare_applicable_read_stats(counters_mngr, stats_mngr):
                                                 cf_stats, cf_name)
             if cf_read_density:
                 for level in cf_read_density.keys():
-                    cf_read_density[level] = f"{cf_read_density[level]:.1f}%"
+                    cf_read_density[level] = \
+                        f"{cf_read_density[level]:.1f}%"
 
-                stats[cfs_key][cf_name]["read_density"] = cf_read_density
+                stats[cfs_key][cf_name]["Read Density"] = cf_read_density
             else:
                 stats[cfs_key][cf_name]["read_density"] = \
                     "No Read Density Available"

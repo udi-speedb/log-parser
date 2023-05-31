@@ -189,22 +189,23 @@ def calc_delete_opers_stats(cfs_names, events_mngr):
 
     stats = DeleteOpersStats(total_num_flushed_entries=0, total_num_deletes=0)
 
-    has_any_data = False
     unavailability_reason = None
+    has_any_data = False
     for cf_name in cfs_names:
         cf_stats = calc_cf_delete_opers_stats(cf_name, events_mngr)
         assert isinstance(cf_stats, DeleteOpersStats)
 
-    if cf_stats.total_num_flushed_entries:
-        has_any_data = True
-        stats.total_num_flushed_entries += cf_stats.total_num_flushed_entries
+        if cf_stats.total_num_flushed_entries:
+            has_any_data = True
+            stats.total_num_flushed_entries += \
+                cf_stats.total_num_flushed_entries
 
-        assert cf_stats.total_num_deletes is not None
-        stats.total_num_deletes += cf_stats.total_num_deletes
-    else:
-        # arbitrarily use the first reason for all
-        assert cf_stats.unavailability_reason is not None
-        unavailability_reason = cf_stats.unavailability_reason
+            assert cf_stats.total_num_deletes is not None
+            stats.total_num_deletes += cf_stats.total_num_deletes
+        else:
+            # arbitrarily use the first reason for all
+            assert cf_stats.unavailability_reason is not None
+            unavailability_reason = cf_stats.unavailability_reason
 
     if not has_any_data:
         return DeleteOpersStats(unavailability_reason=unavailability_reason)
