@@ -540,7 +540,7 @@ def prepare_cf_flushes_stats_for_display(parsed_log):
         write_amp_level1 = get_write_amp_level1()
         if not write_amp_level1:
             write_amp_level1 = "No Write Amp for Level1"
-        cf_disp["Write-Amp"] = write_amp_level1
+        cf_disp["L0->L1 Write-Amp"] = write_amp_level1
 
         for reason, reason_stats in cf_flushes_stats.items():
             assert isinstance(reason_stats, calc_utils.PerFlushReasonStats)
@@ -988,13 +988,14 @@ def prepare_per_cf_read_latency_for_display(
                                                 cf_file_histogram_stats_mngr,
                                                 cf_stats, cf_name)
             if cf_read_density:
+                disp_cf_read_density = {}
                 for level in cf_read_density.keys():
-                    cf_read_density[level] = \
-                        f"{cf_read_density[level]:.1f}%"
+                    disp_cf_read_density[f"Level {level}"] = \
+                        f"{100 * cf_read_density[level]:.1f}%"
 
-                stats[cf_name]["Read Density"] = cf_read_density
+                stats[cf_name]["Read Density"] = disp_cf_read_density
             else:
-                stats[cf_name]["read_density"] = "No Read Density Available"
+                stats[cf_name]["Read_density"] = "No Read Density Available"
     return stats
 
 

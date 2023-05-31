@@ -745,7 +745,13 @@ def calc_cf_read_density(compactions_stats_mngr, cf_file_histogram_stats_mngr,
         per_level_read_density[level] =\
             per_level_read_norm[level] / per_level_size_norm[level]
 
-    return per_level_read_density
+    # Calculate the weighted-average of the norms
+    sum_densities = sum(per_level_read_density.values())
+    per_level_weighted_avg_density = \
+        {level: density / sum_densities for level, density in
+         per_level_read_density.items()}
+
+    return per_level_weighted_avg_density
 
 
 @dataclass
