@@ -958,8 +958,9 @@ def prepare_applicable_read_stats(counters_mngr, stats_mngr):
             stats[cfs_key][cf_name] = {
                 "Num Reads": num_for_display(cf_stats.num_reads),
                 "Avg. Read Latency": f"{cf_stats.avg_read_latency_us:.1f} us",
-                "Max Read Latency": f"{cf_stats.max_read_latency_us} us",
-                "Read % of All CF-s": f"{cf_stats.read_percent_of_all_cfs}"
+                "Max Read Latency": f"{cf_stats.max_read_latency_us:.1f} us",
+                "Read % of All CF-s":
+                    f"{cf_stats.read_percent_of_all_cfs:.1f}%"
             }
 
         for cf_name, cf_stats in per_cf_stats.items():
@@ -968,6 +969,9 @@ def prepare_applicable_read_stats(counters_mngr, stats_mngr):
                                                 cf_file_histogram_stats_mngr,
                                                 cf_stats, cf_name)
             if cf_read_density:
+                for level in cf_read_density.keys():
+                    cf_read_density[level] = f"{cf_read_density[level]:.1f}%"
+
                 stats[cfs_key][cf_name]["read_density"] = cf_read_density
             else:
                 stats[cfs_key][cf_name]["read_density"] = \
