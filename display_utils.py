@@ -321,7 +321,7 @@ def prepare_warn_warnings_for_display(warn_warnings_info):
 
 def get_all_options_for_display(parsed_log):
     all_options = {}
-    cf_names = parsed_log.get_cfs_names()
+    cf_names = parsed_log.get_cfs_names_that_have_options()
     db_options = parsed_log.get_database_options()
 
     all_options["DB"] = db_options.get_db_wide_options_for_display()
