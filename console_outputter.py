@@ -101,11 +101,11 @@ def print_general_info(f, parsed_log: ParsedLog):
     print_cf_console_printout(f, parsed_log)
 
     if db_size_time != ingest_time:
-        print(f"(*) DB / CF-s Size Time is calculated at: "
+        print(f"(*) DB / CF-s Size is calculated at: "
               f"{db_size_time}", file=f)
-        print(f"(**) Ingest Time is calculated at: {ingest_time}", file=f)
+        print(f"(**) Ingest Data are calculated at: {ingest_time}", file=f)
     else:
-        print(f"(*) Info-s Time is calculated at: {db_size_time}", file=f)
+        print(f"(*) Data is calculated at: {db_size_time}", file=f)
 
 
 def get_console_output(log_file_path, parsed_log, output_type):
