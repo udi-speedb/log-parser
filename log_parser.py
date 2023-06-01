@@ -103,7 +103,7 @@ def setup_cmd_line_parser():
     parser.add_argument("-o", "--output-folder",
                         default=utils.DEFAULT_OUTPUT_FOLDER,
                         help="The name of the folder where output "
-                             "files will be stoed in SUB-FOLDERS "
+                             "files will be stored in SUB-FOLDERS "
                              f"named "
                              f"{utils.OUTPUT_SUB_FOLDER_PREFIX}dddd."
                              "'dddd' is the run number (default: %(default)s)")
