@@ -297,7 +297,7 @@ class CountersMngr:
             utils.get_human_readable_number(values["Count"])
         disp_values["Sum"] = \
             utils.get_human_readable_number(values["Sum"])
-        disp_values["Average"] = f'{values["Average"]:.1f} us'
+        disp_values["Avg. Read Latency"] = f'{values["Average"]:.1f} us'
         disp_values["P50"] = f'{values["P50"]:.1f} us'
         disp_values["P95"] = f'{values["P95"]:.1f} us'
         disp_values["P99"] = f'{values["P99"]:.1f} us'
