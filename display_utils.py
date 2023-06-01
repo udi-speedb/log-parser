@@ -301,20 +301,31 @@ def prepare_warn_warnings_for_display(warn_warnings_info):
     # {<warning-type>: {<cf-name>: {<category>: <number of messages>}}
 
     disp = dict()
-
+    disp_db = dict()
+    disp_cfs = dict()
     for cf_name, cf_info in warn_warnings_info.items():
         if cf_name == utils.NO_CF:
-            disp_cf_name = "DB"
+            disp_dict = disp_db
         else:
-            disp_cf_name = cf_name
+            disp_cfs[cf_name] = dict()
+            disp_dict = disp_cfs[cf_name]
 
-        disp[disp_cf_name] = dict()
         for category, num_in_category in cf_info.items():
             disp_category = category.value
-            disp[disp_cf_name][disp_category] = num_in_category
+            disp_dict[disp_category] = num_in_category
 
-    if not disp:
+    if not disp_db and not disp_cfs:
         return None
+
+    if disp_db:
+        disp["DB"] = disp_db
+    else:
+        disp["DB"] = "No DB Warnings"
+
+    if disp_cfs:
+        disp["CF-s"] = disp_cfs
+    else:
+        disp["CF-s"] = "No CF-s Warnings"
 
     return disp
 

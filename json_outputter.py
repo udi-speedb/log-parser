@@ -125,12 +125,7 @@ def get_fatal_warnings_json(warnings_mngr):
 
 def get_warnings_json(parsed_log):
     warnings_mngr = parsed_log.get_warnings_mngr()
-
-    warnings_json = dict()
-    warnings_json["Warnings"] = get_warn_warnings_json(warnings_mngr)
-    warnings_json["Errors"] = get_error_warnings_json(warnings_mngr)
-    warnings_json["Fatals"] = get_fatal_warnings_json(warnings_mngr)
-
+    warnings_json = get_warn_warnings_json(warnings_mngr)
     return warnings_json
 
 
