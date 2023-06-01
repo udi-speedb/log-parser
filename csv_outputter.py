@@ -94,12 +94,18 @@ def get_human_readable_histogram_csv(counter_and_histograms_mngr):
     # csv header lines (counter names)
     header_line1 = [""]
     header_line2 = [""]
+
     counter_histogram_columns =\
         list(all_applicable_entries[counters_names[0]][0]["values"].keys())
+    counter_histogram_columns.remove("Average")
+    counter_histogram_columns.remove("Interval Count")
+    counter_histogram_columns.remove("Interval Sum")
+
     num_counter_columns = len(counter_histogram_columns)
     for counter_name in counters_names:
-        name_columns = ["" for i in range(num_counter_columns)]
-        name_columns[int(num_counter_columns/2)] = counter_name
+        name_columns = ["." for i in range(num_counter_columns-1)]
+        name_columns.insert(0, counter_name)
+        # name_columns[int(num_counter_columns/2)] = counter_name
         header_line1.extend(name_columns)
 
         header_line2.extend(counter_histogram_columns)
