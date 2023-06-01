@@ -18,6 +18,7 @@ from bisect import bisect
 from dataclasses import dataclass, field
 
 import db_files
+import db_options
 import utils
 from counters import CountersMngr
 from events import EventType
@@ -947,3 +948,56 @@ def calc_filter_stats(files_monitor, counters_mngr):
         stats.filter_counters = filter_counters
 
     return stats
+
+
+def get_cfs_common_and_specific_options(db_opts):
+    assert isinstance(db_opts, db_options.DatabaseOptions)
+
+    cfs_names = db_opts.get_cfs_names()
+    cfs_options = {cf_name: db_opts.get_cf_options(cf_name)
+                   for cf_name in cfs_names}
+
+    cfs_common_options, cfs_specific_options = \
+        db_opts.get_unified_cfs_options(cfs_options)
+
+    return cfs_common_options, cfs_specific_options
+
+
+# def get_cfs_diff_dict_for_display(baseline_opts, log_opts, cfs_names):
+#     cfs_diffs = []
+#     for log_cf_name in cfs_names:
+#         cf_diff = DatabaseOptions.get_cfs_options_diff(
+#             baseline_opts, utils.DEFAULT_CF_NAME, log_opts,
+#             log_cf_name).get_diff_dict()
+#         cfs_diffs.append(cf_diff)
+#
+#         common_cfs_diffs, unique_cfs_diffs = \
+#             DatabaseOptions.get_unified_cfs_diffs(cfs_diffs)
+#
+#         if common_cfs_diffs:
+#             options, table_options = \
+#                 DatabaseOptions.prepare_flat_full_names_cf_options_for_display(
+#                     common_cfs_diffs, get_diff_tuple_for_display)
+#             display_cfs_diff[CFS_COMMON_KEY] = {
+#                 "CF": options,
+#                 TABLE_KEY: table_options
+#             }
+#
+#         display_cfs_diff[CFS_SPECIFIC_KEY] = {}
+#         for cf_diff in unique_cfs_diffs:
+#             if len(list(cf_diff.keys())) > 1:
+#                 cf_name = cf_diff[CfsOptionsDiff.CF_NAMES_KEY]["New"]
+#                 del(cf_diff[CfsOptionsDiff.CF_NAMES_KEY])
+#                 options, table_options = \
+#                     DatabaseOptions.\
+#                     prepare_flat_full_names_cf_options_for_display(
+#                         cf_diff, get_diff_tuple_for_display)
+#
+#                 display_cfs_diff[CFS_SPECIFIC_KEY][cf_name] = {
+#                     "CF": options,
+#                     TABLE_KEY: table_options
+#                 }
+#         if not display_cfs_diff[CFS_SPECIFIC_KEY]:
+#             display_cfs_diff[CFS_SPECIFIC_KEY] = "No Specific CF-s Options"
+#
+#     return display_cfs_diff

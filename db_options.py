@@ -469,7 +469,7 @@ class DatabaseOptions:
             # TODO - Verify the format of the options_dict
             self.options_dict = section_based_options_dict
 
-        self.column_families = None
+        self.cfs_names = None
         self.setup_column_families()
 
     def __str__(self):
@@ -492,6 +492,7 @@ class DatabaseOptions:
 
     def create_cf_in_section_if_necessary(self, section_type, cf_name):
         if cf_name not in self.options_dict[section_type]:
+            self.cfs_names.append(cf_name)
             self.options_dict[section_type][cf_name] = dict()
 
     def create_section_and_cf_in_section_if_necessary(self, section_type,
@@ -525,21 +526,21 @@ class DatabaseOptions:
         self.setup_column_families()
 
     def setup_column_families(self):
-        self.column_families = []
+        self.cfs_names = []
 
         if SectionType.CF in self.options_dict:
-            self.column_families =\
+            self.cfs_names =\
                 list(self.options_dict[SectionType.CF].keys())
 
         if SectionType.DB_WIDE in self.options_dict:
-            self.column_families.extend(
+            self.cfs_names.extend(
                 list(self.options_dict[SectionType.DB_WIDE].keys()))
 
     def are_db_wide_options_set(self):
         return SectionType.DB_WIDE in self.options_dict
 
     def get_cfs_names(self):
-        cf_names_no_db_wide = self.column_families
+        cf_names_no_db_wide = copy.deepcopy(self.cfs_names)
         if DB_WIDE_CF_NAME in cf_names_no_db_wide:
             cf_names_no_db_wide.remove(DB_WIDE_CF_NAME)
         return cf_names_no_db_wide

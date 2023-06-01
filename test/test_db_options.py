@@ -14,6 +14,7 @@
 
 import pytest
 
+import calc_utils
 import db_options as db_opts
 import utils
 
@@ -24,6 +25,8 @@ cf3 = 'cf3'
 
 EMPTY_FULL_NAMES_OPTIONS_DICT = db_opts.FullNamesOptionsDict()
 DB_WIDE_CF_NAME = utils.NO_CF
+CF_SECTION_TYPE = db_opts.SectionType.CF
+TABLE_SECTION_TYPE = db_opts.SectionType.TABLE_OPTIONS
 
 
 baseline_options = {
@@ -830,3 +833,153 @@ def test_get_unified_cfs_diffs():
           'TableOptions.BlockBasedTable.cf1_option': (True, False)},
          {db_opts.CfsOptionsDiff.CF_NAMES_KEY: {"Base": default, "New": cf2},
           'TableOptions.BlockBasedTable.cf2_option': (200, 300)}])
+
+
+def test_get_cfs_common_and_specific_options():
+    get_opts = calc_utils.get_cfs_common_and_specific_options
+
+    cf_option1 = "CF-Option1"
+    cf_option2 = "CF-Option2"
+    cf_option3 = "CF-Option3"
+
+    cf_table_option1 = "CF-Table-Option1"
+    cf_table_option2 = "CF-Table-Option2"
+
+    full_cf_option1_name = db_opts.get_full_option_name(CF_SECTION_TYPE,
+                                                        cf_option1)
+    full_cf_option2_name = db_opts.get_full_option_name(CF_SECTION_TYPE,
+                                                        cf_option2)
+    full_cf_option3_name = db_opts.get_full_option_name(CF_SECTION_TYPE,
+                                                        cf_option3)
+    full_cf_table_option1_name =\
+        db_opts.get_full_option_name(TABLE_SECTION_TYPE, cf_table_option1)
+    full_cf_table_option2_name = \
+        db_opts.get_full_option_name(TABLE_SECTION_TYPE, cf_table_option2)
+
+    dbo = db_opts.DatabaseOptions()
+    assert get_opts(dbo) == ({}, {})
+
+    dbo.set_cf_option(cf1, cf_option1, 1, allow_new_option=True)
+    expected_common = {full_cf_option1_name: 1}
+    expected_specific = {cf1: {}}
+    assert get_opts(dbo) == (expected_common, expected_specific)
+
+    dbo.set_cf_option(cf1, cf_option2, 2, allow_new_option=True)
+    expected_common = {
+        full_cf_option1_name: 1,
+        full_cf_option2_name: 2
+    }
+    expected_specific = {cf1: {}}
+    assert get_opts(dbo) == (expected_common, expected_specific)
+
+    dbo.set_cf_option(cf2, cf_option3, 3, allow_new_option=True)
+    expected_common = {}
+    expected_specific = {
+        cf1: {full_cf_option1_name: 1,
+              full_cf_option2_name: 2},
+        cf2: {full_cf_option3_name: 3}
+    }
+    assert get_opts(dbo) == (expected_common, expected_specific)
+
+    dbo.set_cf_option(cf2, cf_option1, 1, allow_new_option=True)
+    expected_common = {full_cf_option1_name: 1}
+    expected_specific = {
+        cf1: {full_cf_option2_name: 2},
+        cf2: {full_cf_option3_name: 3}
+    }
+    assert get_opts(dbo) == (expected_common, expected_specific)
+
+    dbo.set_cf_option(cf2, cf_option1, 5)
+    expected_common = {}
+    expected_specific = {
+        cf1: {full_cf_option1_name: 1,
+              full_cf_option2_name: 2},
+        cf2: {full_cf_option1_name: 5,
+              full_cf_option3_name: 3}
+    }
+    assert get_opts(dbo) == (expected_common, expected_specific)
+
+    dbo.set_cf_table_option(cf2, cf_table_option1, 100, allow_new_option=True)
+    expected_common = {}
+    expected_specific = {
+        cf1: {full_cf_option1_name: 1,
+              full_cf_option2_name: 2},
+        cf2: {full_cf_option1_name: 5,
+              full_cf_option3_name: 3,
+              full_cf_table_option1_name: 100}
+    }
+    assert get_opts(dbo) == (expected_common, expected_specific)
+
+    dbo.set_cf_table_option(cf1, cf_table_option1, 100, allow_new_option=True)
+    expected_common = {full_cf_table_option1_name: 100}
+    expected_specific = {
+        cf1: {full_cf_option1_name: 1,
+              full_cf_option2_name: 2},
+        cf2: {full_cf_option1_name: 5,
+              full_cf_option3_name: 3}
+    }
+    assert get_opts(dbo) == (expected_common, expected_specific)
+
+    dbo.set_cf_table_option(cf1, cf_table_option2, 200, allow_new_option=True)
+    expected_common = {full_cf_table_option1_name: 100}
+    expected_specific = {
+        cf1: {full_cf_option1_name: 1,
+              full_cf_option2_name: 2,
+              full_cf_table_option2_name: 200},
+        cf2: {full_cf_option1_name: 5,
+              full_cf_option3_name: 3}
+    }
+    assert get_opts(dbo) == (expected_common, expected_specific)
+
+    dbo.set_cf_table_option(cf2, cf_table_option2, 200, allow_new_option=True)
+    expected_common = {
+        full_cf_table_option1_name: 100,
+        full_cf_table_option2_name: 200
+    }
+    expected_specific = {
+        cf1: {full_cf_option1_name: 1,
+              full_cf_option2_name: 2},
+        cf2: {full_cf_option1_name: 5,
+              full_cf_option3_name: 3}
+    }
+    assert get_opts(dbo) == (expected_common, expected_specific)
+
+    dbo.set_cf_option(cf1, cf_option3, 3, allow_new_option=True)
+    expected_common = {
+        full_cf_option3_name: 3,
+        full_cf_table_option1_name: 100,
+        full_cf_table_option2_name: 200
+    }
+    expected_specific = {
+        cf1: {full_cf_option1_name: 1,
+              full_cf_option2_name: 2},
+        cf2: {full_cf_option1_name: 5}
+    }
+    assert get_opts(dbo) == (expected_common, expected_specific)
+
+    dbo.set_cf_option(cf1, cf_option1, 5)
+    expected_common = {
+        full_cf_option1_name: 5,
+        full_cf_option3_name: 3,
+        full_cf_table_option1_name: 100,
+        full_cf_table_option2_name: 200
+    }
+    expected_specific = {
+        cf1: {full_cf_option2_name: 2},
+        cf2: {}
+    }
+    assert get_opts(dbo) == (expected_common, expected_specific)
+
+    dbo.set_cf_option(cf2, cf_option2, 2, allow_new_option=True)
+    expected_common = {
+        full_cf_option1_name: 5,
+        full_cf_option2_name: 2,
+        full_cf_option3_name: 3,
+        full_cf_table_option1_name: 100,
+        full_cf_table_option2_name: 200
+    }
+    expected_specific = {
+        cf1: {},
+        cf2: {}
+    }
+    assert get_opts(dbo) == (expected_common, expected_specific)

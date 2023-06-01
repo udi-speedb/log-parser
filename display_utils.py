@@ -381,26 +381,22 @@ def prepare_cfs_specific_options_for_display(cfs_specific_options):
 
 def get_all_options_for_display(parsed_log):
     all_options = {}
-    cf_names = parsed_log.get_cfs_names_that_have_options()
+
     db_opts = parsed_log.get_database_options()
 
-    all_options["DB"] = db_opts.get_db_wide_options_for_display()
+    cfs_common_options, cfs_specific_options =  \
+        calc_utils.get_cfs_common_and_specific_options(db_opts)
 
-    cfs_options = {}
+    db_disp_opts = db_opts.get_db_wide_options_for_display()
 
-    for cf_name in cf_names:
-        cf_options = db_opts.get_cf_options(cf_name)
-        cfs_options[cf_name] = cf_options
-
-    cfs_common_options, cfs_specific_options = \
-        db_opts.get_unified_cfs_options(cfs_options)
-
-    cfs_options = dict()
-    cfs_options[CFS_COMMON_KEY] = \
+    cfs_disp_opts = dict()
+    cfs_disp_opts[CFS_COMMON_KEY] = \
         prepare_cfs_common_options_for_display(cfs_common_options)
-    cfs_options[CFS_SPECIFIC_KEY] = \
+    cfs_disp_opts[CFS_SPECIFIC_KEY] = \
         prepare_cfs_specific_options_for_display(cfs_specific_options)
-    all_options["CF-s"] = cfs_options
+
+    all_options["DB"] = db_disp_opts
+    all_options["CF-s"] = cfs_disp_opts
 
     return all_options
 
