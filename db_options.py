@@ -267,7 +267,7 @@ class FullNamesOptionsDict:
     def __init__(self, options_dict=None):
         self.options_dict = {}
         if options_dict is not None:
-            self.options_dict = options_dict
+            self.options_dict = copy.deepcopy(options_dict)
 
     def __eq__(self, other):
         if isinstance(other, FullNamesOptionsDict):
@@ -277,6 +277,15 @@ class FullNamesOptionsDict:
         else:
             assert False, "Comparing to an invalid type " \
                           f"({type(other)})"
+
+    def init_from_full_names_options_no_cf_dict(
+            self, cf_name, options_dict_no_cf):
+        # Input: {Full-option-name: <option-value>}
+        # Converts to the format of this class using the specified cf_name
+        assert self.options_dict == {}
+
+        for full_option_name, option_value in options_dict_no_cf.items():
+            self.options_dict[full_option_name] = {cf_name: option_value}
 
     def set_option(self, section_type, cf_name, option_name, option_value):
         if section_type == SectionType.DB_WIDE:
@@ -628,6 +637,7 @@ class DatabaseOptions:
         # First assume no common options, later remove common
         # Remove cf-name from values to allow comparison
         for cf_name in cfs_names:
+            assert isinstance(cfs_options[cf_name], FullNamesOptionsDict)
             unique_cfs_options[cf_name] = {}
             for option_name, option_value_with_cf_name in \
                     cfs_options[cf_name].options_dict.items():

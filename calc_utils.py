@@ -963,41 +963,46 @@ def get_cfs_common_and_specific_options(db_opts):
     return cfs_common_options, cfs_specific_options
 
 
-# def get_cfs_diff_dict_for_display(baseline_opts, log_opts, cfs_names):
-#     cfs_diffs = []
-#     for log_cf_name in cfs_names:
-#         cf_diff = DatabaseOptions.get_cfs_options_diff(
-#             baseline_opts, utils.DEFAULT_CF_NAME, log_opts,
-#             log_cf_name).get_diff_dict()
-#         cfs_diffs.append(cf_diff)
-#
-#         common_cfs_diffs, unique_cfs_diffs = \
-#             DatabaseOptions.get_unified_cfs_diffs(cfs_diffs)
-#
-#         if common_cfs_diffs:
-#             options, table_options = \
-#                 DatabaseOptions.prepare_flat_full_names_cf_options_for_display(
-#                     common_cfs_diffs, get_diff_tuple_for_display)
-#             display_cfs_diff[CFS_COMMON_KEY] = {
-#                 "CF": options,
-#                 TABLE_KEY: table_options
-#             }
-#
-#         display_cfs_diff[CFS_SPECIFIC_KEY] = {}
-#         for cf_diff in unique_cfs_diffs:
-#             if len(list(cf_diff.keys())) > 1:
-#                 cf_name = cf_diff[CfsOptionsDiff.CF_NAMES_KEY]["New"]
-#                 del(cf_diff[CfsOptionsDiff.CF_NAMES_KEY])
-#                 options, table_options = \
-#                     DatabaseOptions.\
-#                     prepare_flat_full_names_cf_options_for_display(
-#                         cf_diff, get_diff_tuple_for_display)
-#
-#                 display_cfs_diff[CFS_SPECIFIC_KEY][cf_name] = {
-#                     "CF": options,
-#                     TABLE_KEY: table_options
-#                 }
-#         if not display_cfs_diff[CFS_SPECIFIC_KEY]:
-#             display_cfs_diff[CFS_SPECIFIC_KEY] = "No Specific CF-s Options"
-#
-#     return display_cfs_diff
+def get_cfs_common_and_specific_diff_dicts(
+        baseline_opts, log_database_options):
+    assert isinstance(log_database_options, db_options.DatabaseOptions)
+
+    cfs_common_options, cfs_specific_options =  \
+        get_cfs_common_and_specific_options(log_database_options)
+
+    common_dummy_cf_name = "COMMON-DUMMY-CF-NAME"
+    common_log_file_full_name_options = db_options.FullNamesOptionsDict()
+    common_log_file_full_name_options.\
+        init_from_full_names_options_no_cf_dict(common_dummy_cf_name,
+                                                cfs_common_options)
+
+    common_diff = db_options.DatabaseOptions.get_cfs_options_diff(
+        baseline_opts,
+        utils.DEFAULT_CF_NAME,
+        common_log_file_full_name_options,
+        common_dummy_cf_name)
+
+    # We need to compare every cf to the baseline, but a baseline that doesn't
+    # have the options common to all the cf-s (they are missing in the
+    # cfs_specific_options)
+    baseline_opts_for_diff_dict = copy.deepcopy(
+        baseline_opts.get_options_dict())
+    utils.delete_dict_keys(baseline_opts_for_diff_dict,
+                           cfs_common_options.keys())
+    baseline_opts_for_diff =\
+        db_options.FullNamesOptionsDict(baseline_opts_for_diff_dict)
+
+    cfs_specific_diffs = dict()
+    for cf_name, cf_options in cfs_specific_options.items():
+        cf_full_name_options = db_options.FullNamesOptionsDict()
+        cf_full_name_options. \
+            init_from_full_names_options_no_cf_dict(cf_name, cf_options)
+
+        cf_diff = db_options.DatabaseOptions.get_cfs_options_diff(
+            baseline_opts_for_diff,
+            utils.DEFAULT_CF_NAME,
+            cf_full_name_options,
+            cf_name)
+        cfs_specific_diffs[cf_name] = cf_diff
+
+    return common_diff, cfs_specific_diffs
