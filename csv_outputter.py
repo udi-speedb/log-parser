@@ -298,7 +298,9 @@ def get_compactions_csv(compactions_monitor):
 
         fields_to_del = [EventField.CF_NAME,
                          EventField.TIME_MICROS,
-                         EventField.EVENT_TYPE]
+                         EventField.EVENT_TYPE,
+                         EventField.RECORDS_IN,
+                         EventField.RECORDS_DROPPED]
         utils.delete_dict_keys(job_info_dict, fields_to_del)
 
         if first_job:

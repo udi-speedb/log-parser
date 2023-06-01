@@ -72,6 +72,8 @@ class EventField(str, Enum):
     OUTPUT_LEVEL = "output_level"
     NUM_OUTPUT_FILES = "num_output_files"
     NUM_INPUT_RECORDS = "num_input_records"
+    RECORDS_IN = "records_in"
+    RECORDS_DROPPED = "records_dropped"
 
 
 class TablePropertiesField(str, Enum):
