@@ -1,5 +1,7 @@
+import copy
 import logging
 from dataclasses import dataclass
+from enum import Enum, auto
 
 import events
 import utils
@@ -28,6 +30,11 @@ class DbFileInfo:
     def file_deleted(self, deletion_time):
         assert self.is_alive()
         self.deletion_time = deletion_time
+
+
+class BlockType(Enum):
+    INDEX = auto()
+    FILTER = auto()
 
 
 class BlockLiveFileStats:
@@ -88,23 +95,31 @@ class BlockLiveFileStats:
                size_bytes
         self.curr_total_live_size_bytes -= size_bytes
 
+    def get_avg_block_size(self):
+        if self.num_created == 0:
+            return 0
+        return self.total_created_size_bytes / self.num_created
+
 
 class DbLiveFilesStats:
     def __init__(self):
         self.num_created = 0
         self.num_live = 0
-        self.index_stats = BlockLiveFileStats()
-        self.filter_stats = BlockLiveFileStats()
+
+        self.blocks_stats = {
+            BlockType.INDEX: BlockLiveFileStats(),
+            BlockType.FILTER: BlockLiveFileStats()
+        }
 
     def file_created(self, file_info):
         assert isinstance(file_info, DbFileInfo)
 
         self.num_created += 1
         self.num_live += 1
-        self.index_stats.block_created(file_info.index_size_bytes,
-                                       file_info.creation_time)
-        self.filter_stats.block_created(file_info.filter_size_bytes,
-                                        file_info.creation_time)
+        self.blocks_stats[BlockType.INDEX].block_created(
+            file_info.index_size_bytes, file_info.creation_time)
+        self.blocks_stats[BlockType.FILTER].block_created(
+            file_info.filter_size_bytes, file_info.creation_time)
 
     def file_deleted(self, file_info):
         assert isinstance(file_info, DbFileInfo)
@@ -113,8 +128,10 @@ class DbLiveFilesStats:
         assert self.num_live <= self.num_created
         self.num_live -= 1
 
-        self.index_stats.block_deleted(file_info.index_size_bytes)
-        self.filter_stats.block_deleted(file_info.filter_size_bytes)
+        self.blocks_stats[BlockType.INDEX].block_deleted(
+            file_info.index_size_bytes)
+        self.blocks_stats[BlockType.FILTER].block_deleted(
+            file_info.filter_size_bytes)
 
 
 class DbFilesMonitor:
@@ -222,8 +239,13 @@ class DbFilesMonitor:
             return []
         return cf_live_files[cf_name]
 
-    def get_live_files_stats(self):
-        return self.live_files_stats
+    def get_blocks_stats(self):
+        stats = {}
+        for cf_name, cf_blocks_stats in self.live_files_stats.items():
+            stats[cf_name] = {
+                block_type: block_stats for block_type, block_stats in
+                cf_blocks_stats.blocks_stats.items()}
+        return stats
 
     def get_cfs_names(self):
         return self.cfs_names
@@ -233,38 +255,64 @@ class DbFilesMonitor:
 # Files Stats
 #
 
-
-@dataclass
-class BlockStats:
-    total_size_bytes: int = 0
-    avg_size_bytes: int = 0
-    max_size_bytes: int = 0
-
-
 @dataclass
 class CfFilterSpecificStats:
     filter_policy: str = None
     avg_bpk: float = 0.0
 
 
-@dataclass
 class CfsFilesStats:
-    index: BlockStats = None
-    filter: BlockStats = None
-    cfs_filter_specific: dict() = None
-
     def __init__(self):
-        self.index = BlockStats()
-        self.filter = BlockStats()
+        self.blocks_stats = \
+            {block_type: BlockLiveFileStats() for block_type in BlockType}
 
         # {<cf_name>: FilterSpecificStats}
         self.cfs_filter_specific = dict()
+
+
+def get_block_stats_for_cfs_group(cfs_names, files_monitor, block_type):
+    assert isinstance(files_monitor, DbFilesMonitor)
+    assert isinstance(block_type, BlockType)
+
+    blocks_stats_all_cfs = files_monitor.get_blocks_stats()
+
+    stats = None
+    for cf_name in cfs_names:
+        if cf_name not in blocks_stats_all_cfs:
+            continue
+
+        assert block_type in blocks_stats_all_cfs[cf_name]
+        if stats is None:
+            stats = copy.deepcopy(blocks_stats_all_cfs[cf_name][block_type])
+        else:
+            block_stats = blocks_stats_all_cfs[cf_name][block_type]
+            assert isinstance(block_stats, BlockLiveFileStats)
+            stats.num_created += block_stats.num_created
+            stats.num_live += block_stats.num_live
+            stats.total_created_size_bytes += \
+                block_stats.total_created_size_bytes
+            stats.curr_total_live_size_bytes += \
+                block_stats.curr_total_live_size_bytes
+            if stats.max_size_bytes < block_stats.max_size_bytes:
+                stats.max_size_bytes = block_stats.max_size_bytes
+                stats.max_size_time = block_stats.max_size_time
+            if stats.max_total_live_size_bytes <\
+                    block_stats.max_total_live_size_bytes:
+                stats.max_total_live_size_bytes = block_stats.max_size_bytes
+                stats.max_live_size_time = block_stats.max_live_size_time
+
+    return stats
 
 
 def calc_cf_files_stats(cfs_names, files_monitor):
     assert isinstance(files_monitor, DbFilesMonitor)
 
     stats = CfsFilesStats()
+
+    for block_type in BlockType:
+        stats.blocks_stats[block_type] = get_block_stats_for_cfs_group(
+            cfs_names, files_monitor, block_type)
+
     num_cf_files = 0
     for cf_name in cfs_names:
         cf_files = files_monitor.get_all_cf_files(cf_name)
@@ -278,13 +326,6 @@ def calc_cf_files_stats(cfs_names, files_monitor):
         total_num_filters_entries = 0
         filter_policy = None
         for i, file_info in enumerate(cf_files):
-            stats.index.total_size_bytes += file_info.index_size_bytes
-            stats.filter.total_size_bytes += file_info.filter_size_bytes
-            stats.index.max_size_bytes = \
-                max(stats.index.max_size_bytes, file_info.index_size_bytes)
-            stats.filter.max_size_bytes = \
-                max(stats.filter.max_size_bytes, file_info.filter_size_bytes)
-
             if i == 0:
                 # Set the filter policy for the cf on the first. Changing
                 # it later is either a bug, or an unsupported (by the
@@ -316,8 +357,5 @@ def calc_cf_files_stats(cfs_names, files_monitor):
     if num_cf_files == 0:
         logging.info(f"No files for all cf-s ({[cfs_names]}")
         return None
-
-    stats.index.avg_size_bytes = stats.index.total_size_bytes / num_cf_files
-    stats.filter.avg_size_bytes = stats.filter.total_size_bytes / num_cf_files
 
     return stats

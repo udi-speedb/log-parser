@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 import db_files
-from db_files import DbFilesMonitor, DbLiveFilesStats
+from db_files import DbFilesMonitor
 from events import EventType
 from test.testing_utils import create_event
 
@@ -67,22 +67,15 @@ def test_calc_cf_files_stats():
                                           filter_size=2000,
                                           filter_policy="Filter1",
                                           num_filter_entries=10000)
-    expected_cf1_stats = db_files.CfsFilesStats()
-    expected_cf2_stats = db_files.CfsFilesStats()
-    expected_all_cfs_stats = db_files.CfsFilesStats()
 
-    expected_cf1_stats.index = \
-        db_files.BlockStats(
-            total_size_bytes=1000, avg_size_bytes=1000, max_size_bytes=1000)
-    expected_cf1_stats.filter = \
-        db_files.BlockStats(
-            total_size_bytes=2000, avg_size_bytes=2000, max_size_bytes=2000)
-    expected_cf1_stats.cfs_filter_specific = \
+    # the block statistics are tested as part of the test_db_files suite
+    expected_cf1_filter_specific_stats = \
         {cf1: db_files.CfFilterSpecificStats(filter_policy="Filter1",
                                              avg_bpk=8*2000/10000)}
     create_file_event_helper(cf_names, helper_info1, monitor)
     actual_cf1_stats = db_files.calc_cf_files_stats([cf1], monitor)
-    assert actual_cf1_stats == expected_cf1_stats
+    assert actual_cf1_stats.cfs_filter_specific == \
+           expected_cf1_filter_specific_stats
     assert db_files.calc_cf_files_stats([cf2], monitor) is None
 
     helper_info2 = FileCreationHelperInfo(job_id=2,
@@ -93,18 +86,13 @@ def test_calc_cf_files_stats():
                                           filter_size=3000,
                                           filter_policy="Filter1",
                                           num_filter_entries=5000)
-    expected_cf1_stats.index = \
-        db_files.BlockStats(
-            total_size_bytes=1500, avg_size_bytes=750.0, max_size_bytes=1000)
-    expected_cf1_stats.filter = \
-        db_files.BlockStats(
-            total_size_bytes=5000, avg_size_bytes=2500, max_size_bytes=3000)
-    expected_cf1_stats.cfs_filter_specific = \
+    expected_cf1_filter_specific_stats = \
         {cf1: db_files.CfFilterSpecificStats(filter_policy="Filter1",
                                              avg_bpk=8*5000/15000)}
     create_file_event_helper(cf_names, helper_info2, monitor)
     actual_cf1_stats = db_files.calc_cf_files_stats([cf1], monitor)
-    assert actual_cf1_stats == expected_cf1_stats
+    assert actual_cf1_stats.cfs_filter_specific == \
+           expected_cf1_filter_specific_stats
     assert db_files.calc_cf_files_stats([cf2], monitor) is None
 
     helper_info3 = FileCreationHelperInfo(job_id=3,
@@ -115,39 +103,20 @@ def test_calc_cf_files_stats():
                                           filter_size=1000,
                                           filter_policy="",
                                           num_filter_entries=0)
-    expected_cf2_stats.index = \
-        db_files.BlockStats(
-            total_size_bytes=1500, avg_size_bytes=1500, max_size_bytes=1500)
-    expected_cf2_stats.filter = \
-        db_files.BlockStats(
-            total_size_bytes=1000, avg_size_bytes=1000, max_size_bytes=1000)
-    expected_cf2_stats.cfs_filter_specific = \
+    expected_cf2_filter_specific_stats = \
         {cf2: db_files.CfFilterSpecificStats(filter_policy=None, avg_bpk=0)}
-    expected_all_cfs_stats.index = \
-        db_files.BlockStats(
-            total_size_bytes=3000, avg_size_bytes=1000, max_size_bytes=1500)
-    expected_all_cfs_stats.filter = \
-        db_files.BlockStats(
-            total_size_bytes=6000, avg_size_bytes=2000, max_size_bytes=3000)
-    expected_all_cfs_stats.cfs_filter_specific = {
-        cf1: expected_cf1_stats.cfs_filter_specific[cf1],
-        cf2: expected_cf2_stats.cfs_filter_specific[cf2]
+    expected_all_cfs_filter_specific_stats = {
+        cf1: expected_cf1_filter_specific_stats[cf1],
+        cf2: expected_cf2_filter_specific_stats[cf2]
     }
 
     create_file_event_helper(cf_names, helper_info3, monitor)
     actual_cf1_stats = db_files.calc_cf_files_stats([cf1], monitor)
-    assert actual_cf1_stats == expected_cf1_stats
+    assert actual_cf1_stats.cfs_filter_specific == \
+           expected_cf1_filter_specific_stats
     actual_cf2_stats = db_files.calc_cf_files_stats([cf2], monitor)
-    assert actual_cf2_stats == expected_cf2_stats
+    assert actual_cf2_stats.cfs_filter_specific == \
+           expected_cf2_filter_specific_stats
     actual_all_cfs_stats = db_files.calc_cf_files_stats([cf1, cf2], monitor)
-    assert actual_all_cfs_stats == expected_all_cfs_stats
-
-    expected_live_files_stats = \
-        DbLiveFilesStats(total_live_indexes_sizes_bytes=3000,
-                         total_live_filters_sizes_bytes=6000,
-                         max_total_live_indexes_sizes_bytes=3000,
-                         max_live_indexes_size_time=time1_plus_11_sec,
-                         max_total_live_filters_sizes_bytes=6000,
-                         max_live_filters_size_time=time1_plus_11_sec)
-    actual_live_files_stats = monitor.get_live_files_stats()
-    assert actual_live_files_stats == expected_live_files_stats
+    assert actual_all_cfs_stats.cfs_filter_specific == \
+           expected_all_cfs_filter_specific_stats

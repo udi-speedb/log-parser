@@ -265,9 +265,7 @@ def test_live_file_stats():
 
     monitor = db_files.DbFilesMonitor()
 
-    cf1_create_1_event =\
-        create_test_file(monitor, cf1_create_1_vars, global_vars)
-    cf1_create_1_time = cf1_create_1_event.get_log_time()
+    create_test_file(monitor, cf1_create_1_vars, global_vars)
     # Live - cf1: index=100, filter=200
 
     delete_test_file(monitor, cf1_delete_1_vars)
@@ -339,13 +337,43 @@ def test_live_file_stats():
     expected_cf2_filter_stats.max_total_live_size_bytes = 200
     expected_cf2_filter_stats.max_live_size_time = cf2_create_1_time
 
-    actual_stats = monitor.get_live_files_stats()
-    assert actual_stats[cf1].num_created == 3
-    assert actual_stats[cf1].num_live == 1
-    assert actual_stats[cf1].index_stats == expected_cf1_index_stats
-    assert actual_stats[cf1].filter_stats == expected_cf1_filter_stats
+    actual_stats = monitor.get_blocks_stats()
+    assert actual_stats[cf1][db_files.BlockType.INDEX] == \
+           expected_cf1_index_stats
+    assert actual_stats[cf1][db_files.BlockType.FILTER] == \
+           expected_cf1_filter_stats
 
-    assert actual_stats[cf2].num_created == 2
-    assert actual_stats[cf2].num_live == 1
-    assert actual_stats[cf2].index_stats == expected_cf2_index_stats
-    assert actual_stats[cf2].filter_stats == expected_cf2_filter_stats
+    assert actual_stats[cf2][db_files.BlockType.INDEX] == \
+           expected_cf2_index_stats
+    assert actual_stats[cf2][db_files.BlockType.FILTER] == \
+           expected_cf2_filter_stats
+
+    expected_index_stats = db_files.BlockLiveFileStats()
+    expected_index_stats.num_created = 5
+    expected_index_stats.num_live = 2
+    expected_index_stats.total_created_size_bytes = 820
+    expected_index_stats.curr_total_live_size_bytes = 570
+    expected_index_stats.max_size_bytes = 400
+    expected_index_stats.max_size_time = cf2_create_2_time
+    expected_index_stats.max_total_live_size_bytes = 400
+    expected_index_stats.max_live_size_time = cf2_create_2_time
+
+    actual_index_stats = \
+        db_files.get_block_stats_for_cfs_group(
+            [cf1, cf2], monitor, db_files.BlockType.INDEX)
+    assert actual_index_stats == expected_index_stats
+
+    expected_filter_stats = db_files.BlockLiveFileStats()
+    expected_filter_stats.num_created = 5
+    expected_filter_stats.num_live = 2
+    expected_filter_stats.total_created_size_bytes = 1130
+    expected_filter_stats.curr_total_live_size_bytes = 230
+    expected_filter_stats.max_size_bytes = 500
+    expected_filter_stats.max_size_time = cf1_create_2_time
+    expected_filter_stats.max_total_live_size_bytes = 530
+    expected_filter_stats.max_live_size_time = cf1_create_3_time
+
+    actual_filter_stats = \
+        db_files.get_block_stats_for_cfs_group(
+            [cf1, cf2], monitor, db_files.BlockType.FILTER)
+    assert actual_filter_stats == expected_filter_stats
