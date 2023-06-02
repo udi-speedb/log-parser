@@ -30,47 +30,98 @@ class DbFileInfo:
         self.deletion_time = deletion_time
 
 
-@dataclass
+class BlockLiveFileStats:
+    def __init__(self):
+        self.num_created = 0
+        self.num_live = 0
+        # Total size of all the blocks in created files (never decreasing)
+        self.total_created_size_bytes = 0
+
+        # Current total size of live indexes / filters
+        self.curr_total_live_size_bytes = 0
+
+        # The size of the largest block created and its creation time
+        self.max_size_bytes = 0
+        self.max_size_time = None
+
+        # The max total size at some point in time
+        self.max_total_live_size_bytes = 0
+        self.max_live_size_time = None
+
+    def __eq__(self, other):
+        assert isinstance(other, BlockLiveFileStats)
+
+        return self.num_created == other.num_created and \
+            self.num_live == other.num_live and \
+            self. total_created_size_bytes ==\
+            other.total_created_size_bytes and \
+            self.curr_total_live_size_bytes == \
+            other.curr_total_live_size_bytes and \
+            self.max_size_bytes == other.max_size_bytes and \
+            self.max_size_time == other.max_size_time and \
+            self.max_total_live_size_bytes == \
+            other.max_total_live_size_bytes and \
+            self.max_live_size_time == other.max_live_size_time
+
+    def block_created(self, size_bytes, time):
+        self.num_created += 1
+        self.num_live += 1
+        self.total_created_size_bytes += size_bytes
+        self.curr_total_live_size_bytes += size_bytes
+
+        if self.max_size_bytes < size_bytes:
+            self.max_size_bytes = size_bytes
+            self.max_size_time = time
+
+        if self.max_total_live_size_bytes <\
+                self.curr_total_live_size_bytes:
+            self.max_total_live_size_bytes = \
+                self.curr_total_live_size_bytes
+            self.max_live_size_time = time
+
+    def block_deleted(self, size_bytes):
+        assert self.num_live > 0
+        assert self.num_live <= self.num_created
+        self.num_live -= 1
+
+        assert self.curr_total_live_size_bytes >= \
+               size_bytes
+        self.curr_total_live_size_bytes -= size_bytes
+
+
 class DbLiveFilesStats:
-    total_live_indexes_sizes_bytes: int = 0
-    total_live_filters_sizes_bytes: int = 0
-    max_total_live_indexes_sizes_bytes: int = 0
-    max_live_indexes_size_time: str = None
-    max_total_live_filters_sizes_bytes: int = 0
-    max_live_filters_size_time: str = None
+    def __init__(self):
+        self.num_created = 0
+        self.num_live = 0
+        self.index_stats = BlockLiveFileStats()
+        self.filter_stats = BlockLiveFileStats()
 
     def file_created(self, file_info):
         assert isinstance(file_info, DbFileInfo)
 
-        self.total_live_indexes_sizes_bytes += file_info.index_size_bytes
-        if self.max_total_live_indexes_sizes_bytes <\
-                self.total_live_indexes_sizes_bytes:
-            self.max_total_live_indexes_sizes_bytes = \
-                self.total_live_indexes_sizes_bytes
-            self.max_live_indexes_size_time = file_info.creation_time
-
-        self.total_live_filters_sizes_bytes += file_info.filter_size_bytes
-        if self.max_total_live_filters_sizes_bytes <\
-                self.total_live_filters_sizes_bytes:
-            self.max_total_live_filters_sizes_bytes = \
-                self.total_live_filters_sizes_bytes
-            self.max_live_filters_size_time = file_info.creation_time
+        self.num_created += 1
+        self.num_live += 1
+        self.index_stats.block_created(file_info.index_size_bytes,
+                                       file_info.creation_time)
+        self.filter_stats.block_created(file_info.filter_size_bytes,
+                                        file_info.creation_time)
 
     def file_deleted(self, file_info):
         assert isinstance(file_info, DbFileInfo)
-        assert self.total_live_indexes_sizes_bytes >= \
-               file_info.index_size_bytes
-        assert self.total_live_filters_sizes_bytes >= \
-               file_info.filter_size_bytes
-        self.total_live_indexes_sizes_bytes -= file_info.index_size_bytes
-        self.total_live_filters_sizes_bytes -= file_info.filter_size_bytes
+
+        assert self.num_live > 0
+        assert self.num_live <= self.num_created
+        self.num_live -= 1
+
+        self.index_stats.block_deleted(file_info.index_size_bytes)
+        self.filter_stats.block_deleted(file_info.filter_size_bytes)
 
 
 class DbFilesMonitor:
     def __init__(self):
         # Format: {<file_number>
         self.files = dict()
-        self.live_files_stats = DbLiveFilesStats()
+        self.live_files_stats = dict()
         self.cfs_names = list()
 
     def new_event(self, event):
@@ -110,9 +161,13 @@ class DbFilesMonitor:
             file_info.num_filter_entries = event.get_num_filter_entries()
 
         self.files[file_number] = file_info
-        self.live_files_stats.file_created(file_info)
+
         if cf_name not in self.cfs_names:
             self.cfs_names.append(cf_name)
+            assert cf_name not in self.live_files_stats
+            self.live_files_stats[cf_name] = DbLiveFilesStats()
+
+        self.live_files_stats[cf_name].file_created(file_info)
 
         return True
 
@@ -134,7 +189,8 @@ class DbFilesMonitor:
             return False
 
         file_info.file_deleted(event.get_log_time())
-        self.live_files_stats.file_deleted(file_info)
+        assert file_info.cf_name in self.live_files_stats
+        self.live_files_stats[file_info.cf_name].file_deleted(file_info)
 
         return True
 
