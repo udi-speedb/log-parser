@@ -811,12 +811,17 @@ def prepare_cache_id_options_for_display(options):
 
 
 def prepare_block_stats_of_cache_for_display(block_stats):
-    assert isinstance(block_stats, db_files.BlockStats)
+    assert isinstance(block_stats, db_files.BlockLiveFileStats)
 
     disp = dict()
 
-    disp["Avg. Size"] = num_for_display(int(block_stats.avg_size_bytes))
-    disp["Max Size"] = num_for_display(block_stats.max_size_bytes)
+    disp["Avg. Size"] = \
+        num_bytes_for_display(int(block_stats.get_avg_block_size()))
+    disp["Max Size"] = num_bytes_for_display(block_stats.max_size_bytes)
+    disp["Max Size At"] = block_stats.max_size_time
+    disp["Max Total Size"] = \
+        num_bytes_for_display(block_stats.max_total_live_size_bytes)
+    disp["Max Total Size At"] = block_stats.max_total_live_size_time
 
     return disp
 
@@ -826,10 +831,18 @@ def prepare_block_cache_info_for_display(cache_info):
 
     disp = dict()
     disp.update(prepare_cache_id_options_for_display(cache_info.options))
+
+    blocks_stats = cache_info.files_stats.blocks_stats
     disp["Index Block"] = \
-        prepare_block_stats_of_cache_for_display(cache_info.files_stats.index)
-    disp["Filter Block"] = \
-        prepare_block_stats_of_cache_for_display(cache_info.files_stats.filter)
+        prepare_block_stats_of_cache_for_display(
+            blocks_stats[db_files.BlockType.INDEX])
+    if blocks_stats[db_files.BlockType.FILTER].num_created > 0:
+        disp["Filter Block"] = \
+            prepare_block_stats_of_cache_for_display(
+                blocks_stats[db_files.BlockType.FILTER])
+    else:
+        disp["Filter Block"] = "No Stats (Filters not in use)"
+
     return disp
 
 
@@ -909,8 +922,6 @@ def prepare_filter_stats_for_display(filter_stats):
                 cf_disp_stats = {
                     "Filter-Policy": cf_stats.filter_policy,
                     "Avg. BPK": f"{cf_stats.avg_bpk:.1f}",
-                    "Max Filter Size":
-                        num_bytes_for_display(cf_stats.max_filter_size_bytes)
                 }
             else:
                 cf_disp_stats = "No Filter"

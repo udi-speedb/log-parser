@@ -53,14 +53,14 @@ class BlockLiveFileStats:
 
         # The max total size at some point in time
         self.max_total_live_size_bytes = 0
-        self.max_live_size_time = None
+        self.max_total_live_size_time = None
 
     def __eq__(self, other):
         assert isinstance(other, BlockLiveFileStats)
 
         return self.num_created == other.num_created and \
             self.num_live == other.num_live and \
-            self. total_created_size_bytes ==\
+            self. total_created_size_bytes == \
             other.total_created_size_bytes and \
             self.curr_total_live_size_bytes == \
             other.curr_total_live_size_bytes and \
@@ -68,9 +68,12 @@ class BlockLiveFileStats:
             self.max_size_time == other.max_size_time and \
             self.max_total_live_size_bytes == \
             other.max_total_live_size_bytes and \
-            self.max_live_size_time == other.max_live_size_time
+            self.max_total_live_size_time == other.max_total_live_size_time
 
     def block_created(self, size_bytes, time):
+        if size_bytes == 0:
+            return
+
         self.num_created += 1
         self.num_live += 1
         self.total_created_size_bytes += size_bytes
@@ -84,9 +87,12 @@ class BlockLiveFileStats:
                 self.curr_total_live_size_bytes:
             self.max_total_live_size_bytes = \
                 self.curr_total_live_size_bytes
-            self.max_live_size_time = time
+            self.max_total_live_size_time = time
 
     def block_deleted(self, size_bytes):
+        if size_bytes == 0:
+            return
+
         assert self.num_live > 0
         assert self.num_live <= self.num_created
         self.num_live -= 1
@@ -299,7 +305,8 @@ def get_block_stats_for_cfs_group(cfs_names, files_monitor, block_type):
             if stats.max_total_live_size_bytes <\
                     block_stats.max_total_live_size_bytes:
                 stats.max_total_live_size_bytes = block_stats.max_size_bytes
-                stats.max_live_size_time = block_stats.max_live_size_time
+                stats.max_total_live_size_time = \
+                    block_stats.max_total_live_size_time
 
     return stats
 

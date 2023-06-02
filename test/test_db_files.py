@@ -305,7 +305,7 @@ def test_live_file_stats():
     expected_cf1_index_stats.max_size_bytes = 170
     expected_cf1_index_stats.max_size_time = cf1_create_3_time
     expected_cf1_index_stats.max_total_live_size_bytes = 220
-    expected_cf1_index_stats.max_live_size_time = cf1_create_3_time
+    expected_cf1_index_stats.max_total_live_size_time = cf1_create_3_time
 
     expected_cf1_filter_stats = db_files.BlockLiveFileStats()
     expected_cf1_filter_stats.num_created = 3
@@ -315,7 +315,7 @@ def test_live_file_stats():
     expected_cf1_filter_stats.max_size_bytes = 500
     expected_cf1_filter_stats.max_size_time = cf1_create_2_time
     expected_cf1_filter_stats.max_total_live_size_bytes = 530
-    expected_cf1_filter_stats.max_live_size_time = cf1_create_3_time
+    expected_cf1_filter_stats.max_total_live_size_time = cf1_create_3_time
 
     expected_cf2_index_stats = db_files.BlockLiveFileStats()
     expected_cf2_index_stats.num_created = 2
@@ -325,7 +325,7 @@ def test_live_file_stats():
     expected_cf2_index_stats.max_size_bytes = 400
     expected_cf2_index_stats.max_size_time = cf2_create_2_time
     expected_cf2_index_stats.max_total_live_size_bytes = 400
-    expected_cf2_index_stats.max_live_size_time = cf2_create_2_time
+    expected_cf2_index_stats.max_total_live_size_time = cf2_create_2_time
 
     expected_cf2_filter_stats = db_files.BlockLiveFileStats()
     expected_cf2_filter_stats.num_created = 2
@@ -335,7 +335,7 @@ def test_live_file_stats():
     expected_cf2_filter_stats.max_size_bytes = 200
     expected_cf2_filter_stats.max_size_time = cf2_create_1_time
     expected_cf2_filter_stats.max_total_live_size_bytes = 200
-    expected_cf2_filter_stats.max_live_size_time = cf2_create_1_time
+    expected_cf2_filter_stats.max_total_live_size_time = cf2_create_1_time
 
     actual_stats = monitor.get_blocks_stats()
     assert actual_stats[cf1][db_files.BlockType.INDEX] == \
@@ -356,7 +356,7 @@ def test_live_file_stats():
     expected_index_stats.max_size_bytes = 400
     expected_index_stats.max_size_time = cf2_create_2_time
     expected_index_stats.max_total_live_size_bytes = 400
-    expected_index_stats.max_live_size_time = cf2_create_2_time
+    expected_index_stats.max_total_live_size_time = cf2_create_2_time
 
     actual_index_stats = \
         db_files.get_block_stats_for_cfs_group(
@@ -371,7 +371,7 @@ def test_live_file_stats():
     expected_filter_stats.max_size_bytes = 500
     expected_filter_stats.max_size_time = cf1_create_2_time
     expected_filter_stats.max_total_live_size_bytes = 530
-    expected_filter_stats.max_live_size_time = cf1_create_3_time
+    expected_filter_stats.max_total_live_size_time = cf1_create_3_time
 
     actual_filter_stats = \
         db_files.get_block_stats_for_cfs_group(

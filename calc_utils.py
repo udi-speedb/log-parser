@@ -849,7 +849,6 @@ def get_warn_warnings_info(warnings_mngr):
 @dataclass
 class CfFilterFilesStats:
     filter_policy: str = None
-    max_filter_size_bytes: int = 0
     avg_bpk: float = 0.0
 
 
@@ -864,11 +863,9 @@ def calc_files_filter_stats(files_monitor):
 
         filter_policy = \
             cf_filter_files_stats.cfs_filter_specific[cf_name].filter_policy
-        max_filter_size_bytes = cf_filter_files_stats.filter.max_size_bytes
         avg_bpk = cf_filter_files_stats.cfs_filter_specific[cf_name].avg_bpk
         cf_filter_files_stats = \
             CfFilterFilesStats(filter_policy=filter_policy,
-                               max_filter_size_bytes=max_filter_size_bytes,
                                avg_bpk=avg_bpk)
         stats[cf_name] = cf_filter_files_stats
 
