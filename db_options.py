@@ -409,7 +409,6 @@ class CfsOptionsDiff:
         else:
             assert False, "Comparing to an invalid type " \
                           f"({type(other)})"
-
         assert CfsOptionsDiff.CF_NAMES_KEY in new_dict, \
             f"{CfsOptionsDiff.CF_NAMES_KEY} key missing in other"
 
@@ -452,14 +451,15 @@ class CfsOptionsDiff:
     def is_empty_diff(self):
         return self.diff_dict == {}
 
-    def get_diff_dict(self):
+    def get_diff_dict(self, exclude_compared_cfs_names=False):
         if self.is_empty_diff():
             return {}
 
         result_dict = self.diff_dict
-        result_dict.update({CfsOptionsDiff.CF_NAMES_KEY:
-                            {"Base": self.baseline_cf_name,
-                             "New": self.new_cf_name}})
+        if not exclude_compared_cfs_names:
+            result_dict.update({CfsOptionsDiff.CF_NAMES_KEY:
+                                {"Base": self.baseline_cf_name,
+                                 "New": self.new_cf_name}})
         return result_dict
 
 

@@ -964,8 +964,11 @@ def get_cfs_common_and_specific_options(db_opts):
 
 
 def get_cfs_common_and_specific_diff_dicts(
-        baseline_opts, log_database_options):
+        baseline_options, log_database_options):
+    assert isinstance(baseline_options, db_options.DatabaseOptions)
     assert isinstance(log_database_options, db_options.DatabaseOptions)
+
+    baseline_opts = baseline_options.get_all_options()
 
     cfs_common_options, cfs_specific_options =  \
         get_cfs_common_and_specific_options(log_database_options)
@@ -976,17 +979,31 @@ def get_cfs_common_and_specific_diff_dicts(
         init_from_full_names_options_no_cf_dict(common_dummy_cf_name,
                                                 cfs_common_options)
 
+    # We need to compare the common to the baseline,
+    # but a baseline that only contains the options common
+    # to all the cf-s
+    baseline_opts_for_diff_dict = dict()
+    baseline_opts_dict = baseline_opts.get_options_dict()
+    for full_common_option_name in cfs_common_options.keys():
+        if full_common_option_name in baseline_opts_dict:
+            baseline_opts_for_diff_dict[full_common_option_name] = \
+                baseline_opts_dict[full_common_option_name]
+    baseline_opts_for_diff =\
+        db_options.FullNamesOptionsDict(baseline_opts_for_diff_dict)
+
     common_diff = db_options.DatabaseOptions.get_cfs_options_diff(
-        baseline_opts,
+        baseline_opts_for_diff,
         utils.DEFAULT_CF_NAME,
         common_log_file_full_name_options,
         common_dummy_cf_name)
+    if common_diff is None or common_diff.is_empty_diff():
+        common_diff = {}
 
     # We need to compare every cf to the baseline, but a baseline that doesn't
     # have the options common to all the cf-s (they are missing in the
     # cfs_specific_options)
-    baseline_opts_for_diff_dict = copy.deepcopy(
-        baseline_opts.get_options_dict())
+    baseline_opts_for_diff_dict = \
+        copy.deepcopy(baseline_opts.get_options_dict())
     utils.delete_dict_keys(baseline_opts_for_diff_dict,
                            cfs_common_options.keys())
     baseline_opts_for_diff =\

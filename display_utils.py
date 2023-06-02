@@ -442,11 +442,10 @@ def prepare_db_wide_diff_dict_for_display(
 
 
 def prepare_cfs_diff_dict_for_display(common_diff, cfs_specific_diffs):
-    assert isinstance(common_diff, db_options.CfsOptionsDiff)
-
     display_cfs_diff = dict()
 
     if common_diff:
+        assert isinstance(common_diff, db_options.CfsOptionsDiff)
         common_diff_dict = common_diff.get_diff_dict()
         del(common_diff_dict[db_options.CfsOptionsDiff.CF_NAMES_KEY])
         options, table_options = \
@@ -505,7 +504,7 @@ def get_options_baseline_diff_for_display(parsed_log):
 
     common_diff, cfs_specific_diffs = \
         calc_utils.get_cfs_common_and_specific_diff_dicts(
-            baseline_opts, log_database_options)
+            baseline_info.baseline_options, log_database_options)
 
     display_diff["CF-s"] = \
         prepare_cfs_diff_dict_for_display(common_diff, cfs_specific_diffs)
