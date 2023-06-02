@@ -458,22 +458,23 @@ def prepare_cfs_diff_dict_for_display(common_diff, cfs_specific_diffs):
     else:
         display_cfs_diff[CFS_COMMON_KEY] = "No Common Diff"
 
+    display_cfs_diff[CFS_SPECIFIC_KEY] = dict()
     if cfs_specific_diffs:
-        display_cfs_diff[CFS_SPECIFIC_KEY] = dict()
         for cf_name, cf_specific_diff in cfs_specific_diffs.items():
-            assert isinstance(cf_specific_diff, db_options.CfsOptionsDiff)
+            if cf_specific_diff is not None:
+                assert isinstance(cf_specific_diff, db_options.CfsOptionsDiff)
 
-            cf_specific_diff_dict = cf_specific_diff.get_diff_dict()
-            del (cf_specific_diff_dict[db_options.CfsOptionsDiff.CF_NAMES_KEY])
-            options, table_options = \
-                DatabaseOptions.prepare_flat_full_names_cf_options_for_display(
-                    cf_specific_diff_dict, get_diff_tuple_for_display)
-            display_cfs_diff[CFS_SPECIFIC_KEY][cf_name] = {
-                "CF": options,
-                TABLE_KEY: table_options
-            }
-    else:
-        display_cfs_diff[CFS_SPECIFIC_KEY] = "No Common Diff"
+                cf_specific_diff_dict = cf_specific_diff.get_diff_dict()
+                del (cf_specific_diff_dict[db_options.CfsOptionsDiff.CF_NAMES_KEY])
+                options, table_options = \
+                    DatabaseOptions.prepare_flat_full_names_cf_options_for_display(
+                        cf_specific_diff_dict, get_diff_tuple_for_display)
+                display_cfs_diff[CFS_SPECIFIC_KEY][cf_name] = {
+                    "CF": options,
+                    TABLE_KEY: table_options
+                }
+    if not display_cfs_diff[CFS_SPECIFIC_KEY]:
+        display_cfs_diff[CFS_SPECIFIC_KEY] = "No CF-s Specific Diff"
 
     return display_cfs_diff
 
