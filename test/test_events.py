@@ -19,7 +19,73 @@ import pytest
 import events
 import utils
 from log_entry import LogEntry
-from test.testing_utils import create_event_entry, create_event, entry_to_event
+from test.testing_utils import create_event_entry, create_event, \
+    entry_to_event, entry_msg_to_entry
+
+
+def test_try_parse_as_flush_preamble():
+    cf = "cf1"
+    job_id = 38
+    wal_id = 55
+
+    valid_preamble = \
+        f"[{cf}] [JOB {job_id}] Flushing memtable with next log file: {wal_id}"
+    partial1 = f"[{cf}] [JOB {job_id}] Flushing"
+    partial2 = f"[{cf}] [JOB {job_id}] Flushing memtable with next log file:"
+
+    test_func = events.FlushStartedEvent.try_parse_as_preamble
+    assert test_func("") == (False, None, None, None)
+    assert test_func(valid_preamble) == (True, cf, job_id, wal_id)
+    assert test_func(partial1) == (False, None, None, None)
+    assert test_func(partial2) == (False, None, None, None)
+
+
+def test_try_parse_as_compaction_preamble():
+    cf = "cf2"
+    job_id = 157
+
+    valid_preamble = \
+        f"[{cf}] [JOB {job_id}] Compacting 1@1 + 5@2 files to L2, score 1.63"
+    partial1 = \
+        f"[{cf}] [JOB {job_id}] Compacting"
+    partial2 = \
+        f"[{cf}] [JOB {job_id}] Compacting 1@1 + 5@2 files"
+
+    test_func = events.CompactionStartedEvent.try_parse_as_preamble
+    assert test_func("") == (False, None, None)
+    assert test_func(valid_preamble) == (True, cf, job_id)
+    assert test_func(partial1) == (False, None, None)
+    assert test_func(partial2) == (False, None, None)
+
+
+def test_try_parse_event_preamble():
+    cf = "cf1"
+    job_id = 38
+    wal_id = 55
+    time_str = "2022/04/17-14:42:19.220573"
+
+    valid_flush_preamble = \
+        f"[{cf}] [JOB {job_id}] Flushing memtable with next log file: {wal_id}"
+    flush_preamble_entry = entry_msg_to_entry(time_str, valid_flush_preamble)
+
+    valid_compaction_preamble = \
+        f"[{cf}] [JOB {job_id}] Compacting 1@1 + 5@2 files to L2, score 1.63"
+    compaction_preamble_entry =\
+        entry_msg_to_entry(time_str, valid_compaction_preamble)
+
+    partial_compaction_preamble = f"[{cf}] [JOB {job_id}] Compacting"
+    invalid_compaction_preamble_entry =\
+        entry_msg_to_entry(time_str, partial_compaction_preamble)
+
+    test_func = events.Event.try_parse_as_preamble
+    info = events.Event.EventPreambleInfo
+
+    assert test_func(flush_preamble_entry) == \
+           info(cf, events.EventType.FLUSH_STARTED, job_id, wal_id=wal_id)
+    assert test_func(compaction_preamble_entry) == \
+           info(cf, events.EventType.COMPACTION_STARTED, job_id, wal_id=None)
+
+    assert test_func(invalid_compaction_preamble_entry) is None
 
 
 def test_compaction_started_event():
@@ -303,7 +369,7 @@ def test_event(cf_name):
                                      events.EventType.FLUSH_FINISHED, cf_name)
 
     assert events.Event.is_an_event_entry(event_entry, cf_names)
-    assert not events.Event.try_parse_event_preamble(event_entry, cf_names)
+    assert not events.Event.try_parse_as_preamble(event_entry)
 
     event1 = events.Event(event_entry, cf_names)
     assert event1.get_type() == events.EventType.FLUSH_FINISHED
@@ -345,17 +411,17 @@ def test_event_preamble(cf_name):
                                      events.EventType.FLUSH_STARTED,
                                      utils.NO_CF, flush_reason="REASON1")
 
-    assert not events.Event.try_parse_event_preamble(event_entry, ["dummy_cf"])
+    assert not events.Event.try_parse_as_preamble(event_entry)
 
     preamble_info = \
-        events.Event.try_parse_event_preamble(preamble_entry, cf_names)
+        events.Event.try_parse_as_preamble(preamble_entry)
     assert preamble_info
     assert preamble_info.job_id == 8
     assert preamble_info.type == events.EventType.FLUSH_STARTED
     assert preamble_info.cf_name == cf_name
 
     assert events.Event.is_an_event_entry(event_entry, cf_names)
-    assert not events.Event.try_parse_event_preamble(event_entry, cf_names)
+    assert not events.Event.try_parse_as_preamble(event_entry)
 
     event = events.Event.create_event(event_entry, cf_names)
     assert event.get_type() == events.EventType.FLUSH_STARTED
@@ -370,7 +436,7 @@ def test_event_preamble(cf_name):
     assert event.get_cf_name() == cf_name
     assert not event.is_db_wide_event()
     assert event.is_cf_event()
-    assert event.get_wal_id_if_available() == '5'
+    assert event.get_wal_id_if_available() == 5
     assert event.get_my_matching_type_info_if_exists() == \
            events.MatchingEventTypeInfo(
                events.EventType.FLUSH_FINISHED, events.FlowType.FLUSH, False)
@@ -400,7 +466,7 @@ def test_illegal_events():
     event_entry = create_event_entry(35, "2022/04/17-14:42:19.220573",
                                      events.EventType.FLUSH_FINISHED, cf1,
                                      make_illegal_json=True)
-    assert events.Event.try_parse_event_preamble(event_entry, cf_names) is None
+    assert events.Event.try_parse_as_preamble(event_entry) is None
     with pytest.raises(utils.ParsingError):
         events.Event.create_event(event_entry, cf_names)
 
@@ -408,7 +474,7 @@ def test_illegal_events():
     event_entry = create_event_entry(None, "2022/04/17-14:42:19.220573",
                                      events.EventType.FLUSH_FINISHED,
                                      cf_name=cf1)
-    assert events.Event.try_parse_event_preamble(event_entry, cf_names) is None
+    assert events.Event.try_parse_as_preamble(event_entry) is None
     assert events.Event.is_an_event_entry(event_entry, [cf1])
     with pytest.raises(utils.ParsingError):
         events.Event.create_event(event_entry, cf_names)
@@ -416,7 +482,7 @@ def test_illegal_events():
     # Missing events.Event Type (definitely illegal)
     event_entry = create_event_entry(200, "2022/04/17-14:42:19.220573",
                                      event_type=None, cf_name=cf1)
-    assert events.Event.try_parse_event_preamble(event_entry, cf_names) is None
+    assert events.Event.try_parse_as_preamble(event_entry) is None
     assert events.Event.is_an_event_entry(event_entry, [cf1])
     with pytest.raises(utils.ParsingError):
         events.Event.create_event(event_entry, cf_names)

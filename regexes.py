@@ -29,7 +29,7 @@ NUM_BYTES_WITH_UNIT_ONLY = fr'{NUM_BYTES_WITH_UNIT}\Z'
 CF_NAME = r'\[([\w\]]*)\]'
 CF_NAME1 = r'\[(?P<cf>.*)\]'
 CF_ID = fr'\(ID\s+{INT_C}\)'
-JOB_ID = r"\[JOB ([\d+]+)\]"
+JOB_ID = r"\[JOB (?P<job_id>[\d+]+)\]"
 POINTER_NC = r'0x[\dA-Fa-f]+'
 POINTER = fr'({POINTER_NC})'
 SANITIZED_POINTER = fr"Pointer \((?P<ptr>{POINTER_NC})\)"
@@ -79,13 +79,23 @@ TABLE_OPTIONS_START_LINE = \
 TABLE_OPTIONS_CONTINUATION_LINE = r"^\s*(\S+)\s*:(.*)"
 
 #
-# EVENTS REGEXES
+# EVENTS
 #
 PREAMBLE_EVENT = r"\[(.*?)\] \[JOB ([0-9]+)\]\s*(.*)"
+
+# [column_family_name_000018] [JOB 38] Flushing memtable with next log file: 5
+# Capturing: cf_name, job_id, wal-id
+FLUSH_EVENT_PREAMBLE = \
+    fr"^{WS}{CF_NAME1}{WS}{JOB_ID}{WS}Flushing memtable " \
+    fr"with next log file:{WS}(?P<wal_id>{INT})"
+
+# [default] [JOB 13] Compacting 1@1 + 5@2 files to L2, score 1.63
+# Capturing: cf_name, job_id
+COMPACTION_EVENT_PREAMBLE = \
+    fr"^{WS}{CF_NAME1}{WS}{JOB_ID}{WS}Compacting.*files to{WS}"
+
 EVENT = r"\s*EVENT_LOG_v1"
 
-FLUSH_PREAMBLE_EVENT_TEXT = r"Flushing memtable with next log " \
-                                  rf"file:\s*{INT_C}"
 
 WRITE_DELAY_WARN_MSG = fr"{CF_NAME}{WS}Stalling writes"
 WRITE_STOP_WARN_MSG = fr"{CF_NAME}{WS}Stopping writes"

@@ -465,9 +465,11 @@ def prepare_cfs_diff_dict_for_display(common_diff, cfs_specific_diffs):
                 assert isinstance(cf_specific_diff, db_options.CfsOptionsDiff)
 
                 cf_specific_diff_dict = cf_specific_diff.get_diff_dict()
-                del (cf_specific_diff_dict[db_options.CfsOptionsDiff.CF_NAMES_KEY])
+                del (cf_specific_diff_dict[
+                    db_options.CfsOptionsDiff.CF_NAMES_KEY])
                 options, table_options = \
-                    DatabaseOptions.prepare_flat_full_names_cf_options_for_display(
+                    DatabaseOptions.\
+                    prepare_flat_full_names_cf_options_for_display(
                         cf_specific_diff_dict, get_diff_tuple_for_display)
                 display_cfs_diff[CFS_SPECIFIC_KEY][cf_name] = {
                     "CF": options,

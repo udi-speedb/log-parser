@@ -175,27 +175,24 @@ class Event:
             []
 
     @staticmethod
-    def try_parse_event_preamble(log_entry, cf_names):
-        cf_preamble_match = re.findall(regexes.PREAMBLE_EVENT,
-                                       log_entry.get_msg())
-        if not cf_preamble_match:
-            return None
-        cf_name = cf_preamble_match[0][0]
-        if cf_name not in cf_names:
-            return None
+    def try_parse_as_preamble(log_entry):
+        event_msg = log_entry.get_msg()
 
-        job_id = int(cf_preamble_match[0][1])
-        wal_id = None
-        rest_of_msg = cf_preamble_match[0][2].strip()
-        if rest_of_msg.startswith('Compacting '):
-            event_type = EventType.COMPACTION_STARTED
+        is_preamble, cf_name, job_id, wal_id = \
+            FlushStartedEvent.try_parse_as_preamble(event_msg)
+        if is_preamble:
+            event_type = EventType.FLUSH_STARTED
         else:
-            is_flush_preamble, wal_id = \
-                FlushStartedEvent.try_parse_as_flush_preamble(rest_of_msg)
-            if is_flush_preamble:
-                event_type = EventType.FLUSH_STARTED
-            else:
-                return None
+            wal_id = None
+
+        if not is_preamble:
+            is_preamble, cf_name, job_id = \
+                CompactionStartedEvent.try_parse_as_preamble(event_msg)
+            if is_preamble:
+                event_type = EventType.COMPACTION_STARTED
+
+        if not is_preamble:
+            return None
 
         return Event.EventPreambleInfo(cf_name, event_type, job_id, wal_id)
 
@@ -466,6 +463,20 @@ class Event:
 
 
 class FlushStartedEvent(Event):
+    @staticmethod
+    def try_parse_as_preamble(event_msg):
+        # [column_family_name_000018] [JOB 38] Flushing memtable with next log file: 5 # noqa
+        # Returns is_preamble, cf_name, job_id, wal_id
+        match = re.search(regexes.FLUSH_EVENT_PREAMBLE, event_msg)
+        if not match:
+            return False, None, None, None
+
+        assert len(match.groups()) == 3
+
+        return True, \
+            match.group('cf'), int(match.group('job_id')), \
+            int(match.group('wal_id'))
+
     # 2023/01/04-08:55:00.625647 27424 EVENT_LOG_v1
     # {"time_micros": 1672822500625643, "job": 8,
     # "event": "flush_started",
@@ -473,16 +484,6 @@ class FlushStartedEvent(Event):
     # "total_data_size": 61530651, "memory_usage": 66349552,
     # "flush_reason": "Write Buffer Full"}
     #
-    @staticmethod
-    def try_parse_as_flush_preamble(preamble_text):
-        preamble_match = re.findall(regexes.FLUSH_PREAMBLE_EVENT_TEXT,
-                                    preamble_text)
-        if not preamble_match:
-            return False, None
-        assert len(preamble_match) == 1
-
-        return True, preamble_match[0]
-
     def __init__(self, log_entry, cf_names):
         super().__init__(log_entry, cf_names)
 
@@ -523,6 +524,18 @@ class FlushFinishedEvent(Event):
 
 
 class CompactionStartedEvent(Event):
+    @staticmethod
+    def try_parse_as_preamble(event_msg):
+        # [default] [JOB 13] Compacting 1@1 + 5@2 files to L2, score 1.63
+        # Returns is_preamble, cf_name, job_id
+        match = re.search(regexes.COMPACTION_EVENT_PREAMBLE, event_msg)
+        if not match:
+            return False, None, None
+
+        assert len(match.groups()) == 2
+
+        return True, match.group('cf'), int(match.group('job_id'))
+
     # 2023/01/04-08:55:00.743718 27420 EVENT_LOG_v1
     # {"time_micros": 1672822500743711, "job": 9,
     # "event": "compaction_started", "compaction_reason": "LevelL0FilesNum",
@@ -762,7 +775,7 @@ class EventsMngr:
 
     def try_parsing_as_preamble(self, entry):
         preamble_info = \
-            Event.try_parse_event_preamble(entry, self.cf_names)
+            Event.try_parse_as_preamble(entry)
         if not preamble_info:
             return False
 

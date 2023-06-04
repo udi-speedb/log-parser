@@ -30,6 +30,16 @@ def create_parsed_log(file_path):
                      should_init_baseline_info=False)
 
 
+def entry_msg_to_entry(time_str, msg, process_id="0x123456", code_pos=None):
+    if code_pos is not None:
+        line = f"{time_str} {process_id} {code_pos} {msg}"
+    else:
+        line = f"{time_str} {process_id} {msg}"
+
+    assert LogEntry.is_entry_start(line)
+    return LogEntry(0, line, last_line=True)
+
+
 def line_to_entry(line, last_line=True):
     assert LogEntry.is_entry_start(line)
     return LogEntry(0, line, last_line)
