@@ -270,7 +270,6 @@ class CompactionsCsvInputFilesInfo:
     updated_columns_names: list = None
     first_column_idx: int = None
     first_level: int = None
-    second_column_idx: int = None
     second_level: int = None
 
 
@@ -280,7 +279,7 @@ def process_compactions_csv_header(columns_names):
     # Name them:
     # 1. The first: "Input Level Files"
     # 2. The second: "Input Files from Output Level"
-    prefix = "files_"
+    prefix = "files_L"
     prefix_len = len(prefix)
 
     updated_columns_names = copy.deepcopy(columns_names)
@@ -288,7 +287,7 @@ def process_compactions_csv_header(columns_names):
         utils.find_list_items_matching_prefix(updated_columns_names, prefix)
 
     if not input_files_columns:
-        return CompactionsCsvInputFilesInfo(updated_columns_names)
+        return None
 
     if len(input_files_columns) > 2:
         logging.warning(
@@ -309,17 +308,22 @@ def process_compactions_csv_header(columns_names):
 
     first_column_idx = updated_columns_names.index(input_files_columns[0])
     first_level = extract_level(first_column_idx)
-    if not first_level:
-        return CompactionsCsvInputFilesInfo(updated_columns_names)
+    if first_level is None:
+        return None
     updated_columns_names[first_column_idx] = "Input Level Files"
 
-    second_column_idx = None
     second_level = None
     if len(input_files_columns) > 1:
         second_column_idx = updated_columns_names.index(input_files_columns[1])
+        if second_column_idx != first_column_idx+1:
+            # Currently, support only consecutive columns
+            logging.warning(
+                f"non-consecutive file_<Level> columns ({columns_names})")
+            return None
+
         second_level = extract_level(second_column_idx)
         if not second_level:
-            return CompactionsCsvInputFilesInfo(updated_columns_names)
+            return None
         updated_columns_names[second_column_idx] = \
             "Input Files from Output Level"
     else:
@@ -330,7 +334,6 @@ def process_compactions_csv_header(columns_names):
         updated_columns_names=updated_columns_names,
         first_column_idx=first_column_idx,
         first_level=first_level,
-        second_column_idx=second_column_idx,
         second_level=second_level
     )
 
@@ -344,7 +347,7 @@ def get_compactions_csv(compactions_monitor):
     if not jobs:
         return None
 
-    first_job = True
+    updated_header_columns_info = None
     for job_id, job_info in jobs.items():
         # Skipping incomplete jobs
         if not job_info.has_finished():
@@ -374,20 +377,50 @@ def get_compactions_csv(compactions_monitor):
                          EventField.RECORDS_DROPPED]
         utils.delete_dict_keys(job_info_dict, fields_to_del)
 
-        if first_job:
-            first_job = False
-            columns_names = list(list(job_info_dict.keys()))
-            header_line = ["Start Time", "Finish Time", "Column Family"] + \
-                columns_names
-            writer.writerow(header_line)
+        columns_names = list(list(job_info_dict.keys()))
+        if updated_header_columns_info is None:
+            updated_header_columns_info = \
+                process_compactions_csv_header(columns_names)
+            if updated_header_columns_info is None:
+                logging.warning("Failed processing CSV's header. Aborting")
+                return None
+            curr_updated_columns_info = updated_header_columns_info
 
+            header_line = ["Start Time", "Finish Time", "Column Family"] + \
+                updated_header_columns_info.updated_columns_names
+            writer.writerow(header_line)
+        else:
+            curr_updated_columns_info = \
+                process_compactions_csv_header(columns_names)
+            if updated_header_columns_info.first_column_idx != \
+                    curr_updated_columns_info.first_column_idx:
+                logging.warning(
+                    f"Mismatching compaction job fields. "
+                    f"Skipping entry:{job_info}")
+                continue
+
+        job_values = list(job_info_dict.values())
+        first_idx = curr_updated_columns_info.first_column_idx
+        first_level_str = f"Level{curr_updated_columns_info.first_level}: "
+        job_values[first_idx] = first_level_str + str(job_values[first_idx])
+
+        if curr_updated_columns_info.second_level is not None:
+            second_level_str = \
+                f"Level{curr_updated_columns_info.second_level}: "
+            job_values[first_idx+1] = \
+                second_level_str + str(job_values[first_idx+1])
+        else:
+            job_values.insert(curr_updated_columns_info.first_column_idx+1, "")
         row = [job_info.get_start_time(),
                job_info.get_finish_time(),
                job_info.cf_name]
-        row += list(job_info_dict.values())
+        row += job_values
         writer.writerow(row)
 
-    return f.getvalue() if not first_job else None
+    if updated_header_columns_info is None:
+        return None
+
+    return f.getvalue()
 
 
 def get_flushes_csv(events_mngr):
