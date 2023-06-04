@@ -113,3 +113,61 @@ def test_get_human_readable_histograms_csv():
         'counter3,2022/11/24-15:50:10.512106,0,0,0,0,0,0,0,0,0\r\n' \
         'counter3,2022/11/24-15:50:11.512106,0,0,0,0,0,0,0,0,0\r\n' \
         'counter3,2022/11/24-15:50:12.512106,0.5,0.5,0.0,0.0,12,36,3.0,12,36\r\n' # noqa
+
+
+def test_process_compactions_csv_header():
+    test_func = csv_outputter.process_compactions_csv_header
+    result_type = csv_outputter.CompactionsCsvInputFilesInfo
+
+    assert test_func([]) == result_type([])
+    assert test_func(["files", "files1"]) == result_type(["files", "files1"])
+    assert test_func(["files_"]) == result_type(["files_"])
+
+    assert test_func(["files_1"]) == \
+           result_type(["Input Level Files", "Input Files from Output Level"],
+                       first_column_idx=0,
+                       first_level=1,
+                       second_column_idx=None,
+                       second_level=None)
+
+    assert test_func(["files_1", "files_2"]) == \
+           result_type(["Input Level Files", "Input Files from Output Level"],
+                       first_column_idx=0,
+                       first_level=1,
+                       second_column_idx=1,
+                       second_level=2)
+
+    assert test_func(["COL1", "files_1", "files_2"]) == \
+           result_type(
+               ["COL1", "Input Level Files", "Input Files from Output Level"],
+               first_column_idx=1,
+               first_level=1,
+               second_column_idx=2,
+               second_level=2)
+
+    assert test_func(["COL1", "files_1", "COL2"]) == \
+           result_type(
+               ["COL1", "Input Level Files", "Input Files from Output "
+                                             "Level", "COL2"],
+               first_column_idx=1,
+               first_level=1,
+               second_column_idx=None,
+               second_level=None)
+
+    assert test_func(["COL1", "files_10", "files_20", "files_30"]) == \
+           result_type(
+               ["COL1", "Input Level Files", "Input Files from Output Level"],
+               first_column_idx=1,
+               first_level=10,
+               second_column_idx=2,
+               second_level=20)
+
+    assert test_func(["COL1", "files_10", "COL2", "files_20", "files_30",
+                      "COL4", "COL5", "files_40"]) == \
+           result_type(
+               ["COL1", "Input Level Files", "COL2",
+                "Input Files from Output Level", "COL4", "COL5"],
+               first_column_idx=1,
+               first_level=10,
+               second_column_idx=3,
+               second_level=20)

@@ -15,6 +15,7 @@ import copy
 import csv
 import io
 import logging
+from dataclasses import dataclass
 
 import utils
 from events import FlowType, EventField
@@ -262,6 +263,76 @@ def get_flow_events_csv(events_mngr, flow_type):
         writer.writerow(row)
 
     return f.getvalue()
+
+
+@dataclass
+class CompactionsCsvInputFilesInfo:
+    updated_columns_names: list = None
+    first_column_idx: int = None
+    first_level: int = None
+    second_column_idx: int = None
+    second_level: int = None
+
+
+def process_compactions_csv_header(columns_names):
+    # Assume that, in general, compactions potentially have 2 "files_" columns
+    # (They may have one, and, maybe more than 2)
+    # Name them:
+    # 1. The first: "Input Level Files"
+    # 2. The second: "Input Files from Output Level"
+    prefix = "files_"
+    prefix_len = len(prefix)
+
+    updated_columns_names = copy.deepcopy(columns_names)
+    input_files_columns = \
+        utils.find_list_items_matching_prefix(updated_columns_names, prefix)
+
+    if not input_files_columns:
+        return CompactionsCsvInputFilesInfo(updated_columns_names)
+
+    if len(input_files_columns) > 2:
+        logging.warning(
+            f"Compactions have more than 2 'files_' columns. Including only "
+            f"the first 2. columns_names:{columns_names}")
+        for to_remove in input_files_columns[2:]:
+            updated_columns_names.remove(to_remove)
+        input_files_columns = input_files_columns[:2]
+
+    def extract_level(column_idx):
+        level_str = columns_names[column_idx][prefix_len:]
+        try:
+            return int(level_str)
+        except ValueError:
+            logging.warning(f"Unexpected column name ("
+                            f"{columns_names[column_idx]}")
+            return None
+
+    first_column_idx = updated_columns_names.index(input_files_columns[0])
+    first_level = extract_level(first_column_idx)
+    if not first_level:
+        return CompactionsCsvInputFilesInfo(updated_columns_names)
+    updated_columns_names[first_column_idx] = "Input Level Files"
+
+    second_column_idx = None
+    second_level = None
+    if len(input_files_columns) > 1:
+        second_column_idx = updated_columns_names.index(input_files_columns[1])
+        second_level = extract_level(second_column_idx)
+        if not second_level:
+            return CompactionsCsvInputFilesInfo(updated_columns_names)
+        updated_columns_names[second_column_idx] = \
+            "Input Files from Output Level"
+    else:
+        updated_columns_names.insert(first_column_idx + 1,
+                                     "Input Files from Output Level")
+
+    return CompactionsCsvInputFilesInfo(
+        updated_columns_names=updated_columns_names,
+        first_column_idx=first_column_idx,
+        first_level=first_level,
+        second_column_idx=second_column_idx,
+        second_level=second_level
+    )
 
 
 def get_compactions_csv(compactions_monitor):

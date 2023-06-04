@@ -126,6 +126,48 @@ def replace_key_keep_order(d, existing_key, new_key):
     return updated_d
 
 
+def insert_dict_entry_before_key(d, existing_key, new_key, new_value):
+    if existing_key not in d:
+        return
+
+    pos = list(d.keys()).index(existing_key)
+    value = d[existing_key]
+
+    items = list(d.items())
+    items.insert(pos, (new_key, value))
+    updated_d = dict(items)
+
+    return updated_d
+
+
+def insert_dict_entry_after_key(d, existing_key, new_key, new_value):
+    if existing_key not in d:
+        return
+
+    pos = list(d.keys()).index(existing_key)
+    value = d[existing_key]
+
+    items = list(d.items())
+    items.insert(pos, (new_key, value))
+    updated_d = dict(items)
+
+    return updated_d
+
+
+def find_dict_keys_matching_prefix(d, key_prefix):
+    assert isinstance(d, dict)
+    matching = list()
+    for key in d.keys():
+        if isinstance(key, str) and key.startswith(key_prefix):
+            matching.append(key)
+    return matching
+
+
+def find_list_items_matching_prefix(lst, prefix):
+    assert isinstance(lst, list)
+    return [e for e in lst if isinstance(e, str) and e.startswith(prefix)]
+
+
 def are_dicts_equal_and_in_same_keys_order(d1, d2):
     if d1 != d2:
         return False
