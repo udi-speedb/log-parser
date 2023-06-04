@@ -465,9 +465,11 @@ def prepare_cfs_diff_dict_for_display(common_diff, cfs_specific_diffs):
                 assert isinstance(cf_specific_diff, db_options.CfsOptionsDiff)
 
                 cf_specific_diff_dict = cf_specific_diff.get_diff_dict()
-                del (cf_specific_diff_dict[db_options.CfsOptionsDiff.CF_NAMES_KEY])
+                del (cf_specific_diff_dict[
+                    db_options.CfsOptionsDiff.CF_NAMES_KEY])
                 options, table_options = \
-                    DatabaseOptions.prepare_flat_full_names_cf_options_for_display(
+                    DatabaseOptions.\
+                    prepare_flat_full_names_cf_options_for_display(
                         cf_specific_diff_dict, get_diff_tuple_for_display)
                 display_cfs_diff[CFS_SPECIFIC_KEY][cf_name] = {
                     "CF": options,
@@ -1013,20 +1015,21 @@ def prepare_per_cf_read_latency_for_display(
                     f"{cf_stats.read_percent_of_all_cfs:.1f}%"
             }
 
-        for cf_name, cf_stats in per_cf_stats.items():
-            cf_read_density = \
-                calc_utils.calc_cf_read_density(compactions_stats_mngr,
-                                                cf_file_histogram_stats_mngr,
-                                                cf_stats, cf_name)
-            if cf_read_density:
-                disp_cf_read_density = {}
-                for level in cf_read_density.keys():
-                    disp_cf_read_density[f"Level {level}"] = \
-                        f"{100 * cf_read_density[level]:.1f}%"
-
-                stats[cf_name]["Read Density"] = disp_cf_read_density
-            else:
-                stats[cf_name]["Read_density"] = "No Read Density Available"
+        # REMOVED READ DENSITY AS IT IS BIASED. NEEDS RECONSIDERATION
+        # for cf_name, cf_stats in per_cf_stats.items():
+        #     cf_read_density = \
+        #         calc_utils.calc_cf_read_density(compactions_stats_mngr,
+        #                                         cf_file_histogram_stats_mngr,
+        #                                         cf_stats, cf_name)
+        #     if cf_read_density:
+        #         disp_cf_read_density = {}
+        #         for level in cf_read_density.keys():
+        #             disp_cf_read_density[f"Level {level}"] = \
+        #                 f"{100 * cf_read_density[level]:.1f}%"
+        #
+        #         stats[cf_name]["Read Density"] = disp_cf_read_density
+        #     else:
+        #         stats[cf_name]["Read_density"] = "No Read Density Available"
     return stats
 
 
