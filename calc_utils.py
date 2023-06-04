@@ -598,24 +598,25 @@ def calc_all_events_histogram(cf_names, events_mngr):
 
 
 def is_cf_compression_by_level(parsed_log, cf_name):
-    db_options = parsed_log.get_database_options()
-    return db_options.get_cf_option(cf_name, "compression[0]") is not None
+    db_opts = parsed_log.get_database_options()
+    return db_opts.get_cf_option(cf_name, "compression[0]") is not None
 
 
-def get_applicable_cf_options(parsed_log: ParsedLog):
-    cf_names = parsed_log.get_cfs_names_that_have_options()
-    db_options = parsed_log.get_database_options()
+def get_applicable_cf_options(db_opts):
+    assert isinstance(db_opts, db_options.DatabaseOptions)
+
+    cf_names = db_opts.get_cfs_names()
     cfs_options = {"compaction_style": {},
                    "compression": {},
                    "filter_policy": {}}
 
     for cf_name in cf_names:
         cfs_options["compaction_style"][cf_name] = \
-            db_options.get_cf_option(cf_name, "compaction_style")
+            db_opts.get_cf_option(cf_name, "compaction_style")
         cfs_options["compression"][cf_name] = \
-            db_options.get_cf_option(cf_name, "compression")
+            db_opts.get_cf_option(cf_name, "compression")
         cfs_options["filter_policy"][cf_name] = \
-            db_options.get_cf_table_option(cf_name, "filter_policy")
+            db_opts.get_cf_table_option(cf_name, "filter_policy")
 
     compaction_styles = list(set(cfs_options["compaction_style"].values()))
     if len(compaction_styles) == 1 and compaction_styles[0] is not None:
@@ -849,13 +850,20 @@ def get_warn_warnings_info(warnings_mngr):
 @dataclass
 class CfFilterFilesStats:
     filter_policy: str = None
-    avg_bpk: float = 0.0
+    avg_bpk: float = None
 
 
-def calc_files_filter_stats(files_monitor):
+def calc_files_filter_stats(db_opts, files_monitor):
+    assert isinstance(db_opts, db_options.DatabaseOptions)
     assert isinstance(files_monitor, db_files.DbFilesMonitor)
 
     stats = dict()
+
+    cfs_options = get_applicable_cf_options(db_opts)
+    for cf_name in cfs_options['filter_policy']:
+        cf_filter_policy = cfs_options['filter_policy'][cf_name]
+        stats[cf_name] = CfFilterFilesStats(filter_policy=cf_filter_policy)
+
     for cf_name in files_monitor.get_cfs_names():
         cf_filter_files_stats = \
             db_files.calc_cf_files_stats([cf_name], files_monitor)
@@ -927,12 +935,13 @@ class FilterStats:
     filter_counters: FilterCounters = None
 
 
-def calc_filter_stats(files_monitor, counters_mngr):
+def calc_filter_stats(db_opts, files_monitor, counters_mngr):
+    assert isinstance(db_opts, db_options.DatabaseOptions)
     assert isinstance(files_monitor, db_files.DbFilesMonitor)
     assert isinstance(counters_mngr, CountersMngr)
 
     stats = FilterStats()
-    files_filter_stats = calc_files_filter_stats(files_monitor)
+    files_filter_stats = calc_files_filter_stats(db_opts, files_monitor)
     if files_filter_stats:
         stats.files_filter_stats = files_filter_stats
 

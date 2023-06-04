@@ -78,13 +78,14 @@ def get_compactions_json(parsed_log):
 
 
 def get_reads_json(parsed_log):
+    db_options = parsed_log.get_database_options()
     stats_mngr = parsed_log.get_stats_mngr()
     counters_mngr = parsed_log.get_counters_mngr()
     files_monitor = parsed_log.get_files_monitor()
 
     read_stats = \
         display_utils.prepare_applicable_read_stats(
-            counters_mngr, stats_mngr, files_monitor)
+            db_options, counters_mngr, stats_mngr, files_monitor)
     if read_stats:
         return read_stats
     else:

@@ -240,6 +240,7 @@ def prepare_db_wide_info_for_display(parsed_log):
 def prepare_general_cf_info_for_display(parsed_log):
     filter_stats = \
         calc_utils.calc_filter_stats(
+            parsed_log.get_database_options(),
             parsed_log.get_files_monitor(),
             parsed_log.get_counters_mngr())
 
@@ -253,7 +254,8 @@ def prepare_general_cf_info_for_display(parsed_log):
     for i, cf_name in enumerate(cf_names):
         table_creation_stats = \
             calc_utils.calc_cf_table_creation_stats(cf_name, events_mngr)
-        cf_options = calc_utils.get_applicable_cf_options(parsed_log)
+        cf_options = calc_utils.get_applicable_cf_options(
+            parsed_log.get_database_options())
         cf_size_bytes = compaction_stats_mngr.get_cf_size_bytes_at_end(cf_name)
 
         display_info[cf_name] = {}
@@ -290,7 +292,10 @@ def prepare_general_cf_info_for_display(parsed_log):
                     if cf_name in filter_stats.files_filter_stats:
                         avg_bpk = \
                             filter_stats.files_filter_stats[cf_name].avg_bpk
-                        bpk_str = f" ({avg_bpk:.1f} bpk)"
+                        if avg_bpk is not None:
+                            bpk_str = f" ({avg_bpk:.1f} bpk)"
+                        else:
+                            bpk_str = " (unknown bpk)"
                 cf_display_info["Filter-Policy"] += bpk_str
             else:
                 cf_display_info["Filter-Policy"] = "No Filter"
@@ -922,9 +927,13 @@ def prepare_filter_stats_for_display(filter_stats):
         for cf_name, cf_stats in filter_stats.files_filter_stats.items():
             assert isinstance(cf_stats, calc_utils.CfFilterFilesStats)
             if cf_stats.filter_policy:
+                if cf_stats.avg_bpk is not None:
+                    bpk_str = f"{cf_stats.avg_bpk:.1f}"
+                else:
+                    bpk_str = "unknown bpk"
                 cf_disp_stats = {
                     "Filter-Policy": cf_stats.filter_policy,
-                    "Avg. BPK": f"{cf_stats.avg_bpk:.1f}",
+                    "Avg. BPK": bpk_str
                 }
             else:
                 cf_disp_stats = "No Filter"
@@ -953,11 +962,13 @@ def prepare_filter_stats_for_display(filter_stats):
 
 
 def prepare_filter_effectiveness_stats_for_display(
-        counters_mngr, files_monitor):
+        db_opts, counters_mngr, files_monitor):
+    assert isinstance(db_opts, db_options.DatabaseOptions)
     assert isinstance(counters_mngr, CountersMngr)
     assert isinstance(files_monitor, db_files.DbFilesMonitor)
 
-    filter_stats = calc_utils.calc_filter_stats(files_monitor, counters_mngr)
+    filter_stats = calc_utils.calc_filter_stats(
+        db_opts, files_monitor, counters_mngr)
 
     if filter_stats:
         return prepare_filter_stats_for_display(filter_stats)
@@ -1033,7 +1044,9 @@ def prepare_per_cf_read_latency_for_display(
     return stats
 
 
-def prepare_applicable_read_stats(counters_mngr, stats_mngr, files_monitor):
+def prepare_applicable_read_stats(
+        db_opts, counters_mngr, stats_mngr, files_monitor):
+    assert isinstance(db_opts, db_options.DatabaseOptions)
     assert isinstance(counters_mngr, CountersMngr)
     assert isinstance(stats_mngr, StatsMngr)
     assert isinstance(files_monitor, db_files.DbFilesMonitor)
@@ -1052,6 +1065,6 @@ def prepare_applicable_read_stats(counters_mngr, stats_mngr, files_monitor):
 
     stats["Filter Effectiveness"] = \
         prepare_filter_effectiveness_stats_for_display(
-            counters_mngr, files_monitor)
+            db_opts, counters_mngr, files_monitor)
 
     return stats if stats else None
