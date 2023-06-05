@@ -187,6 +187,7 @@ class ParsedLog:
         self.log_entries = None
 
         utils.parsing_context.parsing_ends()
+        self.cfs_metadata.parsing_complete()
         self.warnings_mngr.set_cfs_names_on_parsing_complete(
             self.get_cfs_names(include_auto_generated=False))
 

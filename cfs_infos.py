@@ -23,14 +23,33 @@ import utils
 get_error_context = utils.get_error_context_from_entry
 
 
+class CfDiscoveryType(Enum):
+    OPTIONS = 1
+    CREATE_NO_OPTIONS = 2
+    DURING_PARSING = 3
+
+
 @dataclass
 class CfMetadata:
+    discovery_type: CfDiscoveryType
     name: str
     discovery_time: str
     has_options: bool
     auto_generated: bool
     id: int = None
     drop_time: str = None
+
+    def __lt__(self, other):
+        assert isinstance(other, CfMetadata)
+
+        if self.id is not None and other.id is not None:
+            return self.id < other.id
+        if self.discovery_type.value != other.discovery_type.value:
+            return self.discovery_type.value < other.discovery_type.value
+        if self.discovery_type == CfDiscoveryType.OPTIONS or \
+                self.discovery_type == CfDiscoveryType.CREATE_NO_OPTIONS:
+            return self.discovery_time < other.discovery_time
+        return self.name < other.name
 
 
 class CfOper(Enum):
@@ -48,24 +67,26 @@ class CfsMetadata:
                                                is_auto_generated, entry):
         self.validate_cf_doesnt_exist(cf_name, entry)
 
-        has_options = True
-        self.cfs_info[cf_name] = CfMetadata(cf_name,
-                                            entry.get_time(),
-                                            has_options,
-                                            is_auto_generated,
-                                            id=cf_id)
+        self.cfs_info[cf_name] = \
+            CfMetadata(discovery_type=CfDiscoveryType.OPTIONS,
+                       name=cf_name,
+                       discovery_time=entry.get_time(),
+                       has_options=True,
+                       auto_generated=is_auto_generated,
+                       id=cf_id)
 
-    def handle_cf_name_found_during_parsing(self, cf_name, entry):
+    def handle_cf_name_found_during_parsing(self, cf_name, entry, cf_id=None):
         if cf_name in self.cfs_info:
             return False
 
         logging.info(f"Found cf name during parsing [{cf_name}]")
-        has_options = False
-        is_auto_generated = False
-        self.cfs_info[cf_name] = CfMetadata(cf_name,
-                                            entry.get_time(),
-                                            has_options,
-                                            is_auto_generated)
+        self.cfs_info[cf_name] = \
+            CfMetadata(discovery_type=CfDiscoveryType.DURING_PARSING,
+                       name=cf_name,
+                       discovery_time=entry.get_time(),
+                       has_options=False,
+                       auto_generated=False,
+                       id=cf_id)
         return True
 
     def try_parse_as_cf_lifetime_entries(self, log_entries, entry_idx):
@@ -115,40 +136,38 @@ class CfsMetadata:
         return True
 
     def try_parse_as_recover_cf(self, entry):
-        cf_match = re.findall(regexes.RECOVERED_CF, entry.get_msg())
+        cf_match = re.search(regexes.RECOVERED_CF, entry.get_msg())
         if not cf_match:
             return False
+        assert len(cf_match.groups()) == 3
 
-        assert len(cf_match) == 1 and len(cf_match[0]) == 2
-
-        cf_name, cf_id = cf_match[0]
+        cf_name = cf_match.group('cf')
+        cf_id = int(cf_match.group('cf_id'))
         self.validate_cf_exists(cf_name, entry)
-
-        self._update_cf(cf_name, cf_id, entry)
+        self.validate_cf_id_unknown_or_same(cf_name, cf_id, entry)
         return True
 
     def try_parse_as_create_cf(self, entry):
-        cf_match = re.findall(regexes.CREATE_CF, entry.get_msg())
+        cf_match = re.search(regexes.CREATE_CF, entry.get_msg())
         if not cf_match:
             return False
 
-        assert len(cf_match) == 1 and len(cf_match[0]) == 2
+        assert len(cf_match.groups()) == 2
 
-        cf_name, cf_id = cf_match[0]
-        self._update_cf(cf_name, cf_id, entry)
-        return True
+        cf_name = cf_match.group('cf')
+        cf_id = int(cf_match.group('cf_id'))
 
-    def _update_cf(self, cf_name, cf_id, entry):
         self.validate_cf_exists(cf_name, entry)
         self.validate_cf_id_unknown_or_same(cf_name, cf_id, entry)
+        return True
 
-        is_auto_generated = False
-        self.cfs_info[cf_name] = \
-            CfMetadata(cf_name, entry.get_time(), int(cf_id),
-                       is_auto_generated)
+    def parsing_complete(self):
+        self.cfs_info = utils.sort_dict_on_values(self.cfs_info)
 
     def set_cf_id(self, cf_name, cf_id, line, line_idx):
         self.validate_cf_exists(cf_name, line, line_idx)
+
+        cf_id = int(cf_id)
         self.validate_cf_id_unknown_or_same(cf_name, cf_id, line, line_idx)
 
         self.cfs_info[cf_name].id = int(cf_id)
@@ -207,8 +226,11 @@ class CfsMetadata:
                 f"cf ({cf_name}) doesn't exist.",
                 self.get_error_context(entry))
 
+    def does_cf_exist(self, cf_name):
+        return cf_name in self.cfs_info
+
     def validate_cf_doesnt_exist(self, cf_name, entry):
-        if cf_name in self.cfs_info:
+        if self.does_cf_exist(cf_name):
             raise utils.ParsingError(
                 f"cf ({cf_name}) already exists.",
                 self.get_error_context(entry))

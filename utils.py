@@ -182,6 +182,10 @@ def unify_lists_preserve_order(l1, l2):
             if not (x in seen or seen.add(x))]
 
 
+def sort_dict_on_values(d):
+    return dict(sorted(d.items(), key=lambda x: x[1]))
+
+
 def has_method(obj, method_name):
     """ Checks if a method exists in an obj """
     return method_name in dir(obj)
@@ -553,7 +557,7 @@ def try_find_cfs_in_lines(cfs_names, lines):
     """
     if isinstance(lines, list):
         lines = "\n".join(lines)
-    match = re.findall(regexes.CF_NAME, lines, re.MULTILINE)
+    match = re.findall(regexes.CF_NAME_OLD, lines, re.MULTILINE)
     if not match:
         return None
 

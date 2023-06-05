@@ -4,15 +4,15 @@ import regexes as r
 
 
 def test_cf_name_regex():
-    assert re.search(r.CF_NAME1, "[CF1]").group('cf') == 'CF1'
-    assert re.search(r.CF_NAME1, "[ C F 1 ]").group('cf') == ' C F 1 '
-    assert re.search(r.CF_NAME1, "[]").group('cf') == ''
-    assert re.search(r.CF_NAME1, "[...]").group('cf') == '...'
-    assert re.search(r.CF_NAME1, "[\0\1]").group('cf') == '\0\1'
-    assert re.search(r.CF_NAME1, "[!@#$%_-=]").group('cf') == '!@#$%_-='
-    assert re.search(r.CF_NAME1, "CF1") is None
-    assert re.search(r.CF_NAME1, "CF1]") is None
-    assert re.search(r.CF_NAME1, "[CF1") is None
+    assert re.search(r.CF_NAME, "[CF1]").group('cf') == 'CF1'
+    assert re.search(r.CF_NAME, "[ C F 1 ]").group('cf') == ' C F 1 '
+    assert re.search(r.CF_NAME, "[]").group('cf') == ''
+    assert re.search(r.CF_NAME, "[...]").group('cf') == '...'
+    assert re.search(r.CF_NAME, "[\0\1]").group('cf') == '\0\1'
+    assert re.search(r.CF_NAME, "[!@#$%_-=]").group('cf') == '!@#$%_-='
+    assert re.search(r.CF_NAME, "CF1") is None
+    assert re.search(r.CF_NAME, "CF1]") is None
+    assert re.search(r.CF_NAME, "[CF1") is None
 
 
 def test_uptime_stats_line_regex():

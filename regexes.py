@@ -19,16 +19,16 @@ WS = r'\s*'
 INT = r'[\d]+'
 INT_C = r"([\d]+)"
 FLOAT = r'[-+]?(?:\d+(?:[.,]\d*)?|[.,]\d+)(?:[eE][-+]?\d+)?'
-FLOAT_C = r'([-+]?(?:\d+(?:[.,]\d*)?|[.,]\d+)(?:[eE][-+]?\d+)?)'
+FLOAT_C = fr'({FLOAT})'
 NUM_UNIT = r'(K|M|G)'
 BYTES_UNIT = r'(KB|MB|GB|TB)'
 NUM_WITH_UNIT = fr'{FLOAT_C}\s*{NUM_UNIT}?\s*'
 NUM_WITH_UNIT_ONLY = fr"{NUM_WITH_UNIT}\Z"
 NUM_BYTES_WITH_UNIT = fr'{FLOAT_C}\s*{BYTES_UNIT}?\s*'
 NUM_BYTES_WITH_UNIT_ONLY = fr'{NUM_BYTES_WITH_UNIT}\Z'
-CF_NAME = r'\[(?P<cf>[\w\]]*)\]'
-CF_NAME1 = r'\[(?P<cf>.*)\]'
-CF_ID = fr'\(ID\s+{INT_C}\)'
+CF_NAME_OLD = r'\[(?P<cf>[\w\]]*)\]'
+CF_NAME = r'\[(?P<cf>.*)\]'
+CF_ID = fr'\(ID\s+(?P<cf_id>{INT})\)'
 JOB_ID = r"\[JOB (?P<job_id>[\d+]+)\]"
 POINTER_NC = r'0x[\dA-Fa-f]+'
 POINTER = fr'({POINTER_NC})'
@@ -52,7 +52,7 @@ START_LINE_PARTS = \
 
 # A log entry that has the cf-name followed by the job id
 # Example [column_family_name_000001] [JOB 31]
-CF_WITH_JOB_ID = fr"{CF_NAME}\s*{JOB_ID}"
+CF_WITH_JOB_ID = fr"{CF_NAME_OLD}\s*{JOB_ID}"
 
 #
 # METADATA REGEXES
@@ -86,29 +86,29 @@ PREAMBLE_EVENT = r"\[(.*?)\] \[JOB ([0-9]+)\]\s*(.*)"
 # [column_family_name_000018] [JOB 38] Flushing memtable with next log file: 5
 # Capturing: cf_name, job_id, wal-id
 FLUSH_EVENT_PREAMBLE = \
-    fr"^{WS}{CF_NAME1}{WS}{JOB_ID}{WS}Flushing memtable " \
+    fr"^{WS}{CF_NAME}{WS}{JOB_ID}{WS}Flushing memtable " \
     fr"with next log file:{WS}(?P<wal_id>{INT})"
 
 # [default] [JOB 13] Compacting 1@1 + 5@2 files to L2, score 1.63
 # Capturing: cf_name, job_id
 COMPACTION_EVENT_PREAMBLE = \
-    fr"^{WS}{CF_NAME1}{WS}{JOB_ID}{WS}Compacting.*files to{WS}"
+    fr"^{WS}{CF_NAME}{WS}{JOB_ID}{WS}Compacting.*files to{WS}"
 
 EVENT = r"\s*EVENT_LOG_v1"
 
 
-WRITE_DELAY_WARN_MSG = fr"{CF_NAME}{WS}Stalling writes"
-WRITE_STOP_WARN_MSG = fr"{CF_NAME}{WS}Stopping writes"
+WRITE_DELAY_WARN_MSG = fr"{CF_NAME_OLD}{WS}Stalling writes"
+WRITE_STOP_WARN_MSG = fr"{CF_NAME_OLD}{WS}Stopping writes"
 
 #
 # STATISTICS RELATED
 #
 DUMP_STATS_STR = r'------- DUMPING STATS -------'
 DB_STATS = fr'^{WS}\*\* DB Stats \*\*{WS}$'
-COMPACTION_STATS = fr'^{WS}\*\* Compaction Stats{WS}{CF_NAME1}{WS}\*\*{WS}$'
+COMPACTION_STATS = fr'^{WS}\*\* Compaction Stats{WS}{CF_NAME}{WS}\*\*{WS}$'
 
 FILE_READ_LATENCY_STATS = \
-    fr'^{WS}\*\* File Read Latency Histogram By Level{WS}{CF_NAME1}' \
+    fr'^{WS}\*\* File Read Latency Histogram By Level{WS}{CF_NAME}' \
     fr'{WS}\*\*{WS}$'
 
 LEVEL_READ_LATENCY_LEVEL_LINE = \
@@ -181,15 +181,20 @@ CF_STALLS_LINE_START = "Stalls(count):"
 CF_STALLS_COUNT_AND_REASON = r"\b(\d+) (.*?),"
 CF_STALLS_INTERVAL_COUNT = r".*interval (\d+) total count$"
 
-RECOVERED_CF = fr"Column family {CF_NAME}\s*{CF_ID}"
+# 2022/12/17-11:12:17.399948 38990 [/version_set.cc:4980] Column family [column_family_name_000009] (ID 9), log number is 41576 # noqa
+RECOVERED_CF = \
+    fr"Column family {CF_NAME}\s*{CF_ID},{WS}log number is (?P<log_num>{INT})"
+
+# 2022/12/17-06:02:37.695926 24554 [/db_impl/db_impl.cc:2799] Created column family [column_family_name_000001] (ID 1) # noqa
 CREATE_CF = fr"Created column family {CF_NAME}\s*{CF_ID}"
+
 DROP_CF = fr"Dropped column family with id {INT_C}\s*"
 
 
 ROCKSDB_BASELINE_LOG_FILE = r"LOG-rocksdb-(\d+\.\d+\.?\d*)"
 SPEEDB_BASELINE_LOG_FILE = r"LOG-speedb-(\d+\.\d+\.?\d*)"
 
-# [default] [JOB 13] Compacting 1@1 + 5@2 files to L2, score 1.63
+# 2021/05/04-20:54:25.385487 7fa4245ff700 [/compaction/compaction_job.cc:1762] [default] [JOB 38680] Compacting 1@5 + 1@6 files to L6, score 0.9 # noqa
 COMPACTION_BEFORE_SCORE_LINE = \
     fr"{CF_NAME}\s*{JOB_ID}\s*Compacting .*" \
     fr"files to L{INT_C},\s*score\s*{FLOAT_C}"
@@ -210,6 +215,6 @@ COMPACTION_BEFORE_SCORE_LINE = \
 # 6: records dropped
 #
 COMPACTION_JOB_FINISH_STATS_LINE = \
-    fr"{CF_NAME}.*,\s*MB\/sec:\s*{FLOAT_C}\s*rd," \
+    fr"{CF_NAME_OLD}.*,\s*MB\/sec:\s*{FLOAT_C}\s*rd," \
     fr"\s*{FLOAT_C}\s*wr,.*read-write-amplify\({FLOAT_C}\)\s*write-amplify\(" \
     fr"{FLOAT_C}\).*records in:\s*{INT_C},\s*records dropped:\s*{INT_C}"

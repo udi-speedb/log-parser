@@ -13,7 +13,7 @@
 # limitations under the License.'''
 
 import test.testing_utils as test_utils
-from cfs_infos import CfMetadata, CfsMetadata
+from cfs_infos import CfMetadata, CfsMetadata, CfDiscoveryType
 
 default = "default"
 cf1 = "cf1"
@@ -76,7 +76,8 @@ def test_add_cf_found_during_options_parsing_cf_name_known():
                                                is_auto_generated=False,
                                                entry=cf1_options_entry)
     expected_cf_metadata = \
-        CfMetadata(name=cf1,
+        CfMetadata(discovery_type=CfDiscoveryType.OPTIONS,
+                   name=cf1,
                    discovery_time='2023/03/07-16:05:55.538873',
                    has_options=True,
                    auto_generated=False,
@@ -106,7 +107,8 @@ def test_add_cf_found_during_options_parsing_auto_generated_cf_name():
                                                is_auto_generated=True,
                                                entry=options_entry)
     expected_cf_metadata = \
-        CfMetadata(name=unknown_cf_name,
+        CfMetadata(discovery_type=CfDiscoveryType.OPTIONS,
+                   name=unknown_cf_name,
                    discovery_time='2023/01/23-22:09:21.013513',
                    has_options=True,
                    auto_generated=True,
@@ -141,7 +143,8 @@ def test_handle_cf_name_found_during_parsing():
     assert cfs.handle_cf_name_found_during_parsing(cf2,
                                                    stats_start_entry)
     expected_cf_metadata = \
-        CfMetadata(name=cf2,
+        CfMetadata(discovery_type=CfDiscoveryType.DURING_PARSING,
+                   name=cf2,
                    discovery_time='2023/01/23-22:19:21.014278',
                    has_options=False,
                    auto_generated=False,
