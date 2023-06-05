@@ -19,6 +19,7 @@ import logging
 import cache_utils
 import calc_utils
 import display_utils
+import log_file
 import utils
 
 
@@ -43,13 +44,15 @@ def get_db_size_json(db_wide_stats_mngr, compactions_stats_mngr):
 
 
 def get_flushes_json(parsed_log):
+    assert isinstance(parsed_log, log_file.ParsedLog)
+
     flushes_json = {}
 
     flushes_stats =\
         display_utils.prepare_cf_flushes_stats_for_display(parsed_log)
 
     if flushes_stats:
-        for cf_name in parsed_log.get_cfs_names():
+        for cf_name in parsed_log.get_cfs_names(include_auto_generated=False):
             if cf_name in flushes_stats:
                 flushes_json[cf_name] = flushes_stats[cf_name]
     else:
@@ -59,6 +62,8 @@ def get_flushes_json(parsed_log):
 
 
 def get_compactions_json(parsed_log):
+    assert isinstance(parsed_log, log_file.ParsedLog)
+
     compactions_json = {}
 
     compactions_stats = \
@@ -68,7 +73,7 @@ def get_compactions_json(parsed_log):
             display_utils.prepare_global_compactions_stats_for_display(
                 parsed_log))
         compactions_json["CF-s"] = {}
-        for cf_name in parsed_log.get_cfs_names():
+        for cf_name in parsed_log.get_cfs_names(include_auto_generated=False):
             if cf_name in compactions_stats:
                 compactions_json["CF-s"][cf_name] = compactions_stats[cf_name]
     else:

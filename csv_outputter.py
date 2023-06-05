@@ -219,11 +219,11 @@ def get_compaction_stats_csv(compaction_stats_mngr):
     return f.getvalue()
 
 
-def get_flow_events_csv(events_mngr, flow_type):
+def get_flow_events_csv(cfs_names, events_mngr, flow_type):
     f = io.StringIO()
     writer = csv.writer(f)
 
-    immutable_events = events_mngr.get_all_flow_events(flow_type)
+    immutable_events = events_mngr.get_all_flow_events(flow_type, cfs_names)
     if not immutable_events:
         return None
 
@@ -423,8 +423,8 @@ def get_compactions_csv(compactions_monitor):
     return f.getvalue()
 
 
-def get_flushes_csv(events_mngr):
-    return get_flow_events_csv(events_mngr, FlowType.FLUSH)
+def get_flushes_csv(cfs_names, events_mngr):
+    return get_flow_events_csv(cfs_names, events_mngr, FlowType.FLUSH)
 
 
 def generate_counters_csv(mngr, output_folder, report_to_console):
@@ -529,8 +529,9 @@ def generate_compactions_csv(
     return compactions_csv_path
 
 
-def generate_flushes_csv(events_mngr, output_folder, report_to_console):
-    flushes_csv = get_flushes_csv(events_mngr)
+def generate_flushes_csv(
+        cfs_names, events_mngr, output_folder, report_to_console):
+    flushes_csv = get_flushes_csv(cfs_names, events_mngr)
     if flushes_csv is None:
         utils.print_msg("No Flushes to report", report_to_console)
         return None

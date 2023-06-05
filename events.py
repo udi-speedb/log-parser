@@ -168,40 +168,35 @@ class Event:
                    self.job_id == other.job_id
 
     @staticmethod
-    def is_an_event_entry(log_entry, cf_names):
+    def is_an_event_entry(log_entry):
         assert isinstance(log_entry, LogEntry)
-        return \
-            re.findall(regexes.EVENT, log_entry.get_msg()) != \
-            []
+        return re.findall(regexes.EVENT, log_entry.get_msg()) != []
 
     @staticmethod
-    def try_parse_event_preamble(log_entry, cf_names):
-        cf_preamble_match = re.findall(regexes.PREAMBLE_EVENT,
-                                       log_entry.get_msg())
-        if not cf_preamble_match:
-            return None
-        cf_name = cf_preamble_match[0][0]
-        if cf_name not in cf_names:
-            return None
+    def try_parse_as_preamble(log_entry):
+        event_msg = log_entry.get_msg()
 
-        job_id = int(cf_preamble_match[0][1])
-        wal_id = None
-        rest_of_msg = cf_preamble_match[0][2].strip()
-        if rest_of_msg.startswith('Compacting '):
-            event_type = EventType.COMPACTION_STARTED
+        is_preamble, cf_name, job_id, wal_id = \
+            FlushStartedEvent.try_parse_as_preamble(event_msg)
+        if is_preamble:
+            event_type = EventType.FLUSH_STARTED
         else:
-            is_flush_preamble, wal_id = \
-                FlushStartedEvent.try_parse_as_flush_preamble(rest_of_msg)
-            if is_flush_preamble:
-                event_type = EventType.FLUSH_STARTED
-            else:
-                return None
+            wal_id = None
+
+        if not is_preamble:
+            is_preamble, cf_name, job_id = \
+                CompactionStartedEvent.try_parse_as_preamble(event_msg)
+            if is_preamble:
+                event_type = EventType.COMPACTION_STARTED
+
+        if not is_preamble:
+            return None
 
         return Event.EventPreambleInfo(cf_name, event_type, job_id, wal_id)
 
     @staticmethod
-    def create_event(log_entry, cf_names):
-        assert Event.is_an_event_entry(log_entry, cf_names)
+    def create_event(log_entry):
+        assert Event.is_an_event_entry(log_entry)
 
         entry_msg = log_entry.get_msg()
         event_json_str = entry_msg[entry_msg.find("{"):]
@@ -216,17 +211,17 @@ class Event:
             event_details_dict, EventField.EVENT_TYPE)
 
         if event_type == EventType.FLUSH_STARTED:
-            event = FlushStartedEvent(log_entry, cf_names)
+            event = FlushStartedEvent(log_entry)
         elif event_type == EventType.FLUSH_FINISHED:
-            event = FlushFinishedEvent(log_entry, cf_names)
+            event = FlushFinishedEvent(log_entry)
         elif event_type == EventType.COMPACTION_STARTED:
-            event = CompactionStartedEvent(log_entry, cf_names)
+            event = CompactionStartedEvent(log_entry)
         elif event_type == EventType.COMPACTION_FINISHED:
-            event = CompactionFinishedEvent(log_entry, cf_names)
+            event = CompactionFinishedEvent(log_entry)
         elif event_type == EventType.TABLE_FILE_CREATION:
-            event = TableFileCreationEvent(log_entry, cf_names)
+            event = TableFileCreationEvent(log_entry)
         elif event_type == EventType.TABLE_FILE_DELETION:
-            event = TableFileDeletionEvent(log_entry, cf_names)
+            event = TableFileDeletionEvent(log_entry)
         else:
             raise utils.ParsingError(
                 f"Unsupported event type ({event_type}).\n{log_entry}")
@@ -239,8 +234,8 @@ class Event:
 
         return event
 
-    def __init__(self, log_entry, cf_names):
-        assert Event.is_an_event_entry(log_entry, cf_names)
+    def __init__(self, log_entry):
+        assert Event.is_an_event_entry(log_entry)
 
         entry_msg = log_entry.get_msg()
         event_json_str = entry_msg[entry_msg.find("{"):]
@@ -466,6 +461,20 @@ class Event:
 
 
 class FlushStartedEvent(Event):
+    @staticmethod
+    def try_parse_as_preamble(event_msg):
+        # [column_family_name_000018] [JOB 38] Flushing memtable with next log file: 5 # noqa
+        # Returns is_preamble, cf_name, job_id, wal_id
+        match = re.search(regexes.FLUSH_EVENT_PREAMBLE, event_msg)
+        if not match:
+            return False, None, None, None
+
+        assert len(match.groups()) == 3
+
+        return True, \
+            match.group('cf'), int(match.group('job_id')), \
+            int(match.group('wal_id'))
+
     # 2023/01/04-08:55:00.625647 27424 EVENT_LOG_v1
     # {"time_micros": 1672822500625643, "job": 8,
     # "event": "flush_started",
@@ -473,18 +482,8 @@ class FlushStartedEvent(Event):
     # "total_data_size": 61530651, "memory_usage": 66349552,
     # "flush_reason": "Write Buffer Full"}
     #
-    @staticmethod
-    def try_parse_as_flush_preamble(preamble_text):
-        preamble_match = re.findall(regexes.FLUSH_PREAMBLE_EVENT_TEXT,
-                                    preamble_text)
-        if not preamble_match:
-            return False, None
-        assert len(preamble_match) == 1
-
-        return True, preamble_match[0]
-
-    def __init__(self, log_entry, cf_names):
-        super().__init__(log_entry, cf_names)
+    def __init__(self, log_entry):
+        super().__init__(log_entry)
 
     @staticmethod
     def get_mandatory_fields():
@@ -514,8 +513,8 @@ class FlushFinishedEvent(Event):
     # "event": "flush_finished", "output_compression": "NoCompression",
     # "lsm_state": [8, 3, 45, 427, 822, 0, 0], "immutable_memtables": 0}
     #
-    def __init__(self, log_entry, cf_names):
-        super().__init__(log_entry, cf_names)
+    def __init__(self, log_entry):
+        super().__init__(log_entry)
 
     @staticmethod
     def get_mandatory_fields():
@@ -523,14 +522,26 @@ class FlushFinishedEvent(Event):
 
 
 class CompactionStartedEvent(Event):
+    @staticmethod
+    def try_parse_as_preamble(event_msg):
+        # [default] [JOB 13] Compacting 1@1 + 5@2 files to L2, score 1.63
+        # Returns is_preamble, cf_name, job_id
+        match = re.search(regexes.COMPACTION_EVENT_PREAMBLE, event_msg)
+        if not match:
+            return False, None, None
+
+        assert len(match.groups()) == 2
+
+        return True, match.group('cf'), int(match.group('job_id'))
+
     # 2023/01/04-08:55:00.743718 27420 EVENT_LOG_v1
     # {"time_micros": 1672822500743711, "job": 9,
     # "event": "compaction_started", "compaction_reason": "LevelL0FilesNum",
     # "files_L0": [17250, 17247, 17243, 17239], "score": 1,
     # "input_data_size": 251316602}
     #
-    def __init__(self, log_entry, cf_names):
-        super().__init__(log_entry, cf_names)
+    def __init__(self, log_entry):
+        super().__init__(log_entry)
 
     @staticmethod
     def get_mandatory_fields():
@@ -568,8 +579,8 @@ class CompactionFinishedEvent(Event):
     # "num_single_delete_mismatches": 0, "num_single_delete_fallthrough": 0,
     # "lsm_state": [4, 7, 45, 427, 822, 0, 0]}
     #
-    def __init__(self, log_entry, cf_names):
-        super().__init__(log_entry, cf_names)
+    def __init__(self, log_entry):
+        super().__init__(log_entry)
 
     @staticmethod
     def get_mandatory_fields():
@@ -629,8 +640,8 @@ class TableFileCreationEvent(Event):
 
     NO_FILTER = ""
 
-    def __init__(self, log_entry, cf_names):
-        super().__init__(log_entry, cf_names)
+    def __init__(self, log_entry):
+        super().__init__(log_entry)
 
     @staticmethod
     def get_mandatory_fields():
@@ -729,8 +740,8 @@ class TableFileDeletionEvent(Event):
     # {"time_micros": 1672823100808460, "job": 8423,
     # "event": "table_file_deletion", "file_number": 37162}
     #
-    def __init__(self, log_entry, cf_names):
-        super().__init__(log_entry, cf_names)
+    def __init__(self, log_entry):
+        super().__init__(log_entry)
 
     @staticmethod
     def get_mandatory_fields():
@@ -752,43 +763,50 @@ class EventsMngr:
     Dictionary of cf events is itself a dictionary of the following format:
     <event-type>: List of Event-s, ordered by their time
     """
-    def __init__(self, job_id_to_cf_name_map, cf_names=[]):
+    def __init__(self, job_id_to_cf_name_map):
         assert isinstance(job_id_to_cf_name_map, dict)
 
         self.job_id_to_cf_name_map = job_id_to_cf_name_map
-        self.cf_names = cf_names
         self.preambles = dict()
         self.events = dict()
 
     def try_parsing_as_preamble(self, entry):
-        preamble_info = \
-            Event.try_parse_event_preamble(entry, self.cf_names)
+        preamble_info = Event.try_parse_as_preamble(entry)
         if not preamble_info:
-            return False
+            return None
+        assert isinstance(preamble_info, Event.EventPreambleInfo)
 
         # If a preamble was already encountered, it must be for the same
         # parameters
         job_id = preamble_info.job_id
-        if preamble_info.job_id in self.preambles:
-            assert self.preambles[job_id].are_equal_ignoring_wal_id(
-                preamble_info)
-        self.preambles[job_id] = preamble_info
+        if preamble_info.job_id not in self.preambles:
+            self.preambles[job_id] = preamble_info
+        else:
+            if not self.preambles[job_id].are_equal_ignoring_wal_id(
+                    preamble_info):
+                logging.error(
+                    f"A preamble with same job id exists, but other preamble"
+                    f" info mismatching (IGNORING NEW). "
+                    f"Existing:{self.preambles[job_id]}. New:{preamble_info}")
+                # Indicating as a preamble, but returning the existing one
+                return self.preambles[job_id]
 
-        return True
+        return preamble_info
 
     def try_adding_entry(self, entry):
         assert isinstance(entry, LogEntry)
 
         # A preamble event is an entry that will be pending for its
         # associated event entry to provide the event with its cf name
-        if self.try_parsing_as_preamble(entry):
-            return True, None, None
+        preamble_info = self.try_parsing_as_preamble(entry)
+        if preamble_info:
+            return True, None, preamble_info.cf_name
 
-        if not Event.is_an_event_entry(entry, self.cf_names):
+        if not Event.is_an_event_entry(entry):
             return False, None, None
 
         try:
-            event = Event.create_event(entry, self.cf_names)
+            event = Event.create_event(entry)
         except utils.ParsingError as e:
             # telling caller I have added it as an event since it's
             # supposedly an event, but badly formatted somehow
@@ -895,10 +913,6 @@ class EventsMngr:
             if new_event.try_adding_matching_event(potential_event):
                 break
 
-    def add_cf_name(self, cf_name):
-        if cf_name not in self.cf_names:
-            self.cf_names.append(cf_name)
-
     def get_cf_events(self, cf_name):
         all_cf_events = []
 
@@ -948,12 +962,12 @@ class EventsMngr:
 
         return flow_events
 
-    def get_all_flow_events(self, flow_type):
+    def get_all_flow_events(self, flow_type, cfs_names):
         # The cf_name is in the event data => no need to have a per-cf
         # dictionary and we will sort the events based on their time
         flow_events = []
 
-        for cf_name in self.cf_names:
+        for cf_name in cfs_names:
             cf_flow_events = self.get_cf_flow_events(flow_type, cf_name)
             if cf_flow_events:
                 flow_events.extend(cf_flow_events)

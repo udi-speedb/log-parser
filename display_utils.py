@@ -172,9 +172,9 @@ def prepare_error_or_fatal_warnings_for_display(warnings_mngr, prepare_error):
 
 def prepare_ingest_info_for_db_wide_info_display(db_wide_info):
     ingest_info = db_wide_info["ingest_info"]
-    assert isinstance(ingest_info, calc_utils.DbIngestInfo)
 
-    if ingest_info:
+    if ingest_info is not None:
+        assert isinstance(ingest_info, calc_utils.DbIngestInfo)
         return prepare_db_ingest_info_for_display(ingest_info)
     else:
         unavailability_reason = "No Ingest Info Available"
@@ -238,6 +238,8 @@ def prepare_db_wide_info_for_display(parsed_log):
 
 
 def prepare_general_cf_info_for_display(parsed_log):
+    assert isinstance(parsed_log, log_file.ParsedLog)
+
     filter_stats = \
         calc_utils.calc_filter_stats(
             parsed_log.get_database_options(),
@@ -246,12 +248,15 @@ def prepare_general_cf_info_for_display(parsed_log):
 
     display_info = {}
 
-    cf_names = parsed_log.get_cfs_names_that_have_options()
+    options_cfs_names = parsed_log.get_cfs_names_that_have_options()
+    cfs_names = utils.unify_lists_preserve_order(
+        options_cfs_names,
+        parsed_log.get_cfs_names(include_auto_generated=True))
     events_mngr = parsed_log.get_events_mngr()
     compaction_stats_mngr = \
         parsed_log.get_stats_mngr().get_compactions_stats_mngr()
 
-    for i, cf_name in enumerate(cf_names):
+    for i, cf_name in enumerate(cfs_names):
         table_creation_stats = \
             calc_utils.calc_cf_table_creation_stats(cf_name, events_mngr)
         cf_options = calc_utils.get_applicable_cf_options(
@@ -267,39 +272,45 @@ def prepare_general_cf_info_for_display(parsed_log):
         cf_display_info["Avg. Value Size"] = \
             num_bytes_for_display(table_creation_stats['avg_value_size'])
 
-        if cf_options['compaction_style'][cf_name] is not None:
-            cf_display_info["Compaction Style"] = \
-                cf_options['compaction_style'][cf_name]
-        else:
-            cf_display_info["Compaction Style"] = "UNKNOWN"
-
-        if cf_options['compression'][cf_name] is not None:
-            cf_display_info["Compression"] = \
-                cf_options['compression'][cf_name]
-        elif calc_utils.is_cf_compression_by_level(parsed_log, cf_name):
-            cf_display_info["Compression"] = "Per-Level"
-        else:
-            cf_display_info["Compression"] = "UNKNOWN"
-
-        cf_filter_policy = cf_options['filter_policy'][cf_name]
-        if cf_filter_policy is not None:
-            if SanitizedValueType.get_type_from_str(cf_filter_policy) != \
-                    SanitizedValueType.NULL_PTR:
-                cf_display_info["Filter-Policy"] = \
-                    cf_options['filter_policy'][cf_name]
-                bpk_str = " (unknown bpk)"
-                if filter_stats.files_filter_stats:
-                    if cf_name in filter_stats.files_filter_stats:
-                        avg_bpk = \
-                            filter_stats.files_filter_stats[cf_name].avg_bpk
-                        if avg_bpk is not None:
-                            bpk_str = f" ({avg_bpk:.1f} bpk)"
-                        else:
-                            bpk_str = " (unknown bpk)"
-                cf_display_info["Filter-Policy"] += bpk_str
+        if cf_name in options_cfs_names:
+            if cf_options['compaction_style'][cf_name] is not None:
+                cf_display_info["Compaction Style"] = \
+                    cf_options['compaction_style'][cf_name]
             else:
-                cf_display_info["Filter-Policy"] = "No Filter"
+                cf_display_info["Compaction Style"] = "UNKNOWN"
+
+            if cf_options['compression'][cf_name] is not None:
+                cf_display_info["Compression"] = \
+                    cf_options['compression'][cf_name]
+            elif calc_utils.is_cf_compression_by_level(parsed_log, cf_name):
+                cf_display_info["Compression"] = "Per-Level"
+            else:
+                cf_display_info["Compression"] = "UNKNOWN"
+
+            cf_filter_policy = cf_options['filter_policy'][cf_name]
+            if cf_filter_policy is not None:
+                if SanitizedValueType.get_type_from_str(cf_filter_policy) != \
+                        SanitizedValueType.NULL_PTR:
+                    cf_display_info["Filter-Policy"] = \
+                        cf_options['filter_policy'][cf_name]
+                    bpk_str = " (unknown bpk)"
+                    if filter_stats.files_filter_stats:
+                        if cf_name in filter_stats.files_filter_stats:
+                            avg_bpk = \
+                                filter_stats.files_filter_stats[cf_name].\
+                                avg_bpk
+                            if avg_bpk is not None:
+                                bpk_str = f" ({avg_bpk:.1f} bpk)"
+                            else:
+                                bpk_str = " (unknown bpk)"
+                    cf_display_info["Filter-Policy"] += bpk_str
+                else:
+                    cf_display_info["Filter-Policy"] = "No Filter"
+            else:
+                cf_display_info["Filter-Policy"] = "UNKNOWN"
         else:
+            cf_display_info['Compaction Style'] = "UNKNOWN"
+            cf_display_info['Compression'] = "UNKNOWN"
             cf_display_info["Filter-Policy"] = "UNKNOWN"
 
     return display_info
@@ -521,6 +532,8 @@ def get_options_baseline_diff_for_display(parsed_log):
 
 
 def prepare_cf_flushes_stats_for_display(parsed_log):
+    assert isinstance(parsed_log, log_file.ParsedLog)
+
     disp = {}
 
     def calc_sizes_histogram():
@@ -551,12 +564,12 @@ def prepare_cf_flushes_stats_for_display(parsed_log):
             last_dump_stats, level=1,
             field=CompactionStatsMngr.LevelFields.WRITE_AMP)
 
-    cf_names = parsed_log.get_cfs_names()
+    cfs_names = parsed_log.get_cfs_names(include_auto_generated=False)
     events_mngr = parsed_log.get_events_mngr()
     stats_mngr = parsed_log.get_stats_mngr()
     compactions_stats_mngr = stats_mngr.get_compactions_stats_mngr()
 
-    for cf_name in cf_names:
+    for cf_name in cfs_names:
         cf_disp = dict()
 
         cf_flushes_stats = \
@@ -623,15 +636,17 @@ def prepare_global_compactions_stats_for_display(parsed_log):
 
 
 def prepare_cf_compactions_stats_for_display(parsed_log):
+    assert isinstance(parsed_log, log_file.ParsedLog)
+
     disp = {}
 
-    cf_names = parsed_log.get_cfs_names()
+    cfs_names = parsed_log.get_cfs_names(include_auto_generated=False)
     log_start_time = parsed_log.get_metadata().get_start_time()
     compactions_monitor = parsed_log.get_compactions_monitor()
     compactions_stats_mngr = \
         parsed_log.get_stats_mngr().get_compactions_stats_mngr()
 
-    for cf_name in cf_names:
+    for cf_name in cfs_names:
         cf_compactions_stats = \
             calc_utils.calc_cf_compactions_stats(
                 cf_name, log_start_time, compactions_monitor,
@@ -735,7 +750,8 @@ def prepare_cfs_size_bytes_growth_for_display(growth):
                 value_str = \
                     f"{start_size_str} -> {end_size_str}  {delta_str}"
         else:
-            value_str = f"{start_size_str} -> 0"
+            # End size is unknown
+            value_str = f"{start_size_str} -> (UNKNOWN SIZE)"
 
         return value_str
 
@@ -743,11 +759,11 @@ def prepare_cfs_size_bytes_growth_for_display(growth):
         disp[cf_name] = {}
 
         if not growth[cf_name]:
-            disp[cf_name] = "Empty Column-Family"
+            disp[cf_name] = "No Growth Information Available"
             continue
 
         total_bytes_start = 0
-        total_bytes_end = 0
+        total_bytes_end = None
         # The levelt are not ordered within growth[cf_name]
         levels_and_sizes = list(growth[cf_name].items())
         levels_and_sizes.sort()
@@ -758,14 +774,18 @@ def prepare_cfs_size_bytes_growth_for_display(growth):
 
             if start_size_bytes is None:
                 start_size_bytes = 0
-            if end_size_bytes is None:
-                end_size_bytes = 0
+            # if end_size_bytes is None:
+            #     end_size_bytes = 0
 
             disp[cf_name][f"Level {level}"] = get_growth_str(
                 start_size_bytes, end_size_bytes)
 
             total_bytes_start += start_size_bytes
-            total_bytes_end += end_size_bytes
+            if end_size_bytes is not None:
+                if total_bytes_end is None:
+                    total_bytes_end = end_size_bytes
+                else:
+                    total_bytes_end += end_size_bytes
 
         disp[cf_name]["Sum"] =\
             get_growth_str(total_bytes_start, total_bytes_end)

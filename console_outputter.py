@@ -16,6 +16,7 @@ import io
 import logging
 
 import display_utils
+import log_file
 import utils
 from log_file import ParsedLog
 
@@ -31,13 +32,14 @@ def print_title(f, log_file_path, parsed_log):
 
 
 def print_cf_console_printout(f, parsed_log):
+    assert isinstance(parsed_log, log_file.ParsedLog)
+
     cfs_info_for_display = \
         display_utils.prepare_general_cf_info_for_display(parsed_log)
-    cfs_names = parsed_log.get_cfs_names_that_have_options()
 
     cfs_display_values = []
-    for i, cf_name in enumerate(cfs_names):
-        cf_info = cfs_info_for_display[cf_name]
+    for cf_name, cf_info in cfs_info_for_display.items():
+        # cf_info = cfs_info_for_display[cf_name]
         row = [
             cf_name,
             cf_info["CF Size"],

@@ -85,6 +85,7 @@ class LogFileOptionsParser:
             option_name, option_value = \
                 LogFileOptionsParser.parse_table_options_line(line)
             if option_name is None:
+                line_idx += 1
                 continue
             topic_info = \
                 get_table_options_topic_info(option_name)

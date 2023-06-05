@@ -88,17 +88,16 @@ class CompactionsMonitor:
 
     def consider_entry(self, entry):
         try:
-            # if self.try_parse_as_score_entry(entry):
-            #     return True
-            if self.try_parse_as_pre_finish_stats_line(entry):
-                return True
-
+            is_finish_stats_line, cf_name = \
+                self.try_parse_as_pre_finish_stats_line(entry)
+            if is_finish_stats_line:
+                return True, cf_name
         except utils.ParsingError as e:
             logging.WARN(f"Error adding entry to compaction jobs.\n"
                          f"error: {e}\n"
                          f"entry:{entry}")
 
-        return False
+        return False, None
 
     def add_job_if_applicable(self, job_id, cf_name=None, entry=None):
         entry_cf_name = entry.get_cf_name() if entry else cf_name
@@ -138,7 +137,7 @@ class CompactionsMonitor:
         match = re.findall(regexes.COMPACTION_JOB_FINISH_STATS_LINE,
                            entry.get_msg())
         if not match:
-            return False
+            return False, None
         assert len(match) == 1 and len(match[0]) == 7
 
         info = PreFinishStatsInfo(*match[0])
@@ -151,7 +150,7 @@ class CompactionsMonitor:
 
         self.pre_finish_stats_infos.append(info)
 
-        return True
+        return True, info.cf_name
 
     def new_event(self, event):
         event_type = event.get_type()

@@ -126,6 +126,8 @@ def calc_cfs_size_bytes_growth(compaction_stats_mngr):
 
 
 def calc_cf_table_creation_stats(cf_name, events_mngr):
+    assert isinstance(events_mngr, EventsMngr)
+
     creation_events = \
         events_mngr.get_cf_events_by_type(cf_name,
                                           EventType.TABLE_FILE_CREATION)
@@ -168,8 +170,7 @@ class DeleteOpersStats:
 
 def calc_cf_delete_opers_stats(cf_name, events_mngr):
     flush_started_events = \
-        events_mngr.get_cf_events_by_type(cf_name,
-                                          EventType.FLUSH_STARTED)
+        events_mngr.get_cf_events_by_type(cf_name, EventType.FLUSH_STARTED)
 
     if not flush_started_events:
         return DeleteOpersStats(
@@ -299,9 +300,9 @@ def get_db_wide_info(parsed_log: ParsedLog):
     warns_mngr = parsed_log.get_warnings_mngr()
     stats_mngr = parsed_log.get_stats_mngr()
     db_wide_stats_mngr = stats_mngr.get_db_wide_stats_mngr()
+    counters_mngr = parsed_log.get_counters_mngr()
 
-    user_opers_stats = get_user_operations_stats(
-        parsed_log.get_counters_mngr())
+    user_opers_stats = get_user_operations_stats(counters_mngr)
     assert isinstance(user_opers_stats, UserOpersStats)
 
     cumulative_writes_stats_dict = \
@@ -322,13 +323,13 @@ def get_db_wide_info(parsed_log: ParsedLog):
     total_keys_sizes = 0
     total_values_size = 0
 
-    cfs_names = parsed_log.get_cfs_names()
+    cfs_names = parsed_log.get_cfs_names(include_auto_generated=False)
     events_mngr = parsed_log.get_events_mngr()
 
     delete_opers_stats = calc_delete_opers_stats(cfs_names, events_mngr)
     assert isinstance(delete_opers_stats, DeleteOpersStats)
 
-    for cf_name in parsed_log.get_cfs_names():
+    for cf_name in cfs_names:
         table_creation_stats = calc_cf_table_creation_stats(cf_name,
                                                             events_mngr)
         total_num_table_created_entries += \
@@ -360,7 +361,7 @@ def get_db_wide_info(parsed_log: ParsedLog):
         "git_hash": metadata.get_git_hash(),
         "db_size_bytes": db_size_bytes_info.size_bytes,
         "db_size_bytes_time": db_size_bytes_info.size_time,
-        "num_cfs": len(parsed_log.get_cfs_names()),
+        "num_cfs": len(parsed_log.get_cfs_names(include_auto_generated=True)),
         "avg_key_size_bytes": avg_key_size_bytes,
         "avg_value_size_bytes": avg_value_size_bytes,
         "num_warnings": warns_mngr.get_total_num_warns(),

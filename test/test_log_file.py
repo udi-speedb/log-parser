@@ -249,11 +249,13 @@ def test_parse_metadata1():
 
 def test_parse_options():
     parsed_log = test_utils.create_parsed_log(SampleLogInfo.FILE_PATH)
-    assert parsed_log.get_cfs_names() == SampleLogInfo.CF_NAMES
+    assert parsed_log.get_cfs_names(include_auto_generated=False) == \
+           SampleLogInfo.CF_NAMES
 
     actual_db_options = parsed_log.get_database_options()
     assert actual_db_options.are_db_wide_options_set()
-    assert actual_db_options.get_cfs_names() == parsed_log.get_cfs_names()
+    assert actual_db_options.get_cfs_names() == \
+           parsed_log.get_cfs_names(include_auto_generated=False)
 
     # Assuming LogFileOptionsParser is fully tested and may be used
     expected_db_options = DatabaseOptions()
@@ -277,7 +279,8 @@ def test_parse_options():
 
 def test_parse_options_in_rolled_log():
     parsed_log = test_utils.create_parsed_log(SampleRolledLogInfo.FILE_PATH)
-    assert parsed_log.get_cfs_names() == SampleRolledLogInfo.CF_NAMES
+    assert parsed_log.get_cfs_names(include_auto_generated=False) == \
+           SampleRolledLogInfo.CF_NAMES
     assert parsed_log.get_auto_generated_cf_names() ==\
            SampleRolledLogInfo.AUTO_GENERATED_CF_NAMES
 

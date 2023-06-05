@@ -164,7 +164,7 @@ def test_try_parse_as_pre_finish_stats_line():
 
     monitor = compactions.CompactionsMonitor()
     monitor.new_event(start_event)
-    assert monitor.consider_entry(pre_fihish_entry)
+    assert monitor.consider_entry(pre_fihish_entry) == (True, cf2)
     monitor.new_event(finish_event)
 
     expected_pre_finish_info = \
@@ -185,31 +185,3 @@ def test_try_parse_as_pre_finish_stats_line():
             pre_finish_info=expected_pre_finish_info)
     }
     assert monitor.get_finished_jobs() == expected_jobs
-
-
-# def test_try_parse_as_score_entry():
-#     before_score = 1.23
-#     level = 1
-#
-#     score_entry = \
-#         line_to_entry(f"{time1} 1234"
-#                       f"[/compaction/compaction_job.cc:2446] "
-#                       f"[{cf1}] [JOB {job_id1}] "
-#                       f"Compacting 4@0 + 3@1 files to L{level}, "
-#                       f"score {before_score}")
-#     monitor = compactions.CompactionsMonitor()
-#     assert monitor.consider_entry(score_entry)
-#
-#     expected_jobs = {job_id1: compactions.CompactionJobInfo(job_id1,
-#                                                 cf_name=cf1,
-#                                                 before_score=before_score,
-#                                                 input_files={})}
-#     assert monitor.get_jobs() == expected_jobs
-#
-#     start_event1 = create_event(job_id1, cf_names, time1,
-#                                 EventType.COMPACTION_STARTED, cf1,
-#                                 compaction_reason=reason1)
-#     monitor.new_event(start_event1)
-#     expected_jobs[job_id1].compaction_reason = reason1
-#     expected_jobs[job_id1].start_time = time1
-#     assert monitor.get_jobs() == expected_jobs

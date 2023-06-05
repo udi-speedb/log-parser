@@ -188,7 +188,7 @@ class ParsedLog:
 
         utils.parsing_context.parsing_ends()
         self.warnings_mngr.set_cfs_names_on_parsing_complete(
-            self.get_cfs_names())
+            self.get_cfs_names(include_auto_generated=False))
 
         self.baseline_info = None
         if should_init_baseline_info:
@@ -320,11 +320,6 @@ class ParsedLog:
         self.cfs_metadata.add_cf_found_during_cf_options_parsing(
             cf_name, cf_id, is_auto_generated, self.get_curr_entry())
 
-        # We don't expect to see our auto-generated cf names in events /
-        # warnings. In these we expect to find only actual cf names
-        if not is_auto_generated:
-            self.update_my_entities_on_new_cf(cf_name)
-
     @staticmethod
     def find_support_info_start_index(log_entries, start_entry_idx):
         entry_idx = start_entry_idx
@@ -399,9 +394,8 @@ class ParsedLog:
         if not result:
             return False
 
-        if cf_name is not None:
-            self.cfs_metadata.handle_cf_name_found_during_parsing(
-                cf_name, entry)
+        self.add_cf_name_found_during_parsing(cf_name, entry)
+        if event:
             self.compactions_monitor.new_event(event)
             self.files_monitor.new_event(event)
 
@@ -416,9 +410,8 @@ class ParsedLog:
                                                self.entry_idx)
 
         if result:
-            for cf_name in cfs_names:
-                self.cfs_metadata.handle_cf_name_found_during_parsing(
-                    cf_name, self.get_entry(entry_idx_on_entry))
+            self.add_cfs_names_found_during_parsing(
+                cfs_names, self.get_entry(entry_idx_on_entry))
 
         return result
 
@@ -428,6 +421,27 @@ class ParsedLog:
                 self.log_entries, self.entry_idx)
 
         return result
+
+    def try_processing_in_monitors(self):
+        curr_entry = self.get_curr_entry()
+        processed, cf_name = \
+            self.compactions_monitor.consider_entry(curr_entry)
+        if cf_name:
+            self.add_cf_name_found_during_parsing(cf_name, curr_entry)
+
+        return processed
+
+    def add_cf_name_found_during_parsing(self, cf_name, entry):
+        if cf_name is None:
+            return
+        self.add_cfs_names_found_during_parsing([cf_name], entry)
+
+    def add_cfs_names_found_during_parsing(self, cfs_names, entry):
+        if not cfs_names:
+            return
+        for cf_name in cfs_names:
+            self.cfs_metadata.handle_cf_name_found_during_parsing(
+                cf_name, entry)
 
     def parse_rest_of_log(self):
         # Parse all the entries and process those that are required
@@ -456,8 +470,7 @@ class ParsedLog:
                     if self.try_parse_as_counters_stats_entries():
                         continue
 
-                    if not self.compactions_monitor.consider_entry(
-                            self.get_curr_entry()):
+                    if not self.try_processing_in_monitors():
                         self.not_parsed_entries.append(self.get_curr_entry())
 
                     self.entry_idx += 1
@@ -477,10 +490,6 @@ class ParsedLog:
         if not self.cfs_metadata.handle_cf_name_found_during_parsing(
                 cf_name, self.get_curr_entry()):
             return
-        self.update_my_entities_on_new_cf(cf_name)
-
-    def update_my_entities_on_new_cf(self, cf_name):
-        self.events_mngr.add_cf_name(cf_name)
 
     def init_baseline_info(self):
         self.baseline_info = \
@@ -514,10 +523,11 @@ class ParsedLog:
     def get_metadata(self):
         return self.metadata
 
-    def get_cfs_names(self):
-        # Return only the names of cf-s which have been actually present in
-        # the log (also implicitly, like "default")
-        return self.cfs_metadata.get_non_auto_generated_cfs_names()
+    def get_cfs_names(self, include_auto_generated):
+        if include_auto_generated:
+            return self.cfs_metadata.get_all_cf_names()
+        else:
+            return self.cfs_metadata.get_non_auto_generated_cfs_names()
 
     def get_cfs_names_that_have_options(self):
         # Return only the names of cf-s for which options exist
@@ -525,9 +535,6 @@ class ParsedLog:
 
     def get_auto_generated_cf_names(self):
         return self.cfs_metadata.get_auto_generated_cf_names()
-
-    def get_num_cfs(self):
-        return len(self.get_cfs_names())
 
     def get_database_options(self):
         return self.db_options

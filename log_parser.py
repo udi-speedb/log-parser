@@ -227,6 +227,9 @@ def generate_json_if_applicable(
 
 
 def generate_csvs_if_applicable(parsed_log, output_folder, report_to_console):
+    assert isinstance(parsed_log, ParsedLog)
+
+    cfs_names = parsed_log.get_cfs_names(include_auto_generated=False)
     events_mngr = parsed_log.get_events_mngr()
     stats_mngr = parsed_log.get_stats_mngr()
     compactions_monitor = parsed_log.get_compactions_monitor()
@@ -247,7 +250,7 @@ def generate_csvs_if_applicable(parsed_log, output_folder, report_to_console):
         compactions_monitor, output_folder, report_to_console)
 
     flushes_csv_path = csv_outputter.generate_flushes_csv(
-        events_mngr, output_folder, report_to_console)
+        cfs_names, events_mngr, output_folder, report_to_console)
 
     def generate_disp_path(path):
         if path is None:

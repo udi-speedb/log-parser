@@ -124,7 +124,7 @@ class CfsMetadata:
         cf_name, cf_id = cf_match[0]
         self.validate_cf_exists(cf_name, entry)
 
-        self.update_cf_internal(cf_name, cf_id, entry)
+        self._update_cf(cf_name, cf_id, entry)
         return True
 
     def try_parse_as_create_cf(self, entry):
@@ -135,10 +135,10 @@ class CfsMetadata:
         assert len(cf_match) == 1 and len(cf_match[0]) == 2
 
         cf_name, cf_id = cf_match[0]
-        self.update_cf_internal(cf_name, cf_id, entry)
+        self._update_cf(cf_name, cf_id, entry)
         return True
 
-    def update_cf_internal(self, cf_name, cf_id, entry):
+    def _update_cf(self, cf_name, cf_id, entry):
         self.validate_cf_exists(cf_name, entry)
         self.validate_cf_id_unknown_or_same(cf_name, cf_id, entry)
 
@@ -180,6 +180,10 @@ class CfsMetadata:
     def get_auto_generated_cf_names(self):
         return [cf_name for cf_name in self.cfs_info.keys() if
                 self.cfs_info[cf_name].auto_generated]
+
+    def get_all_cf_names(self):
+        return self.get_non_auto_generated_cfs_names() + \
+               self.get_auto_generated_cf_names()
 
     def get_num_cfs(self):
         return len(self.cfs_info) if self.cfs_info else 0

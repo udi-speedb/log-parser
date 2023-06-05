@@ -30,6 +30,16 @@ def create_parsed_log(file_path):
                      should_init_baseline_info=False)
 
 
+def entry_msg_to_entry(time_str, msg, process_id="0x123456", code_pos=None):
+    if code_pos is not None:
+        line = f"{time_str} {process_id} {code_pos} {msg}"
+    else:
+        line = f"{time_str} {process_id} {msg}"
+
+    assert LogEntry.is_entry_start(line)
+    return LogEntry(0, line, last_line=True)
+
+
 def line_to_entry(line, last_line=True):
     assert LogEntry.is_entry_start(line)
     return LogEntry(0, line, last_line)
@@ -100,13 +110,13 @@ def create_event_entry(job_id, time_str, event_type=None, cf_name=None,
     event_line += '}'
 
     event_entry = LogEntry(0, event_line, True)
-    assert Event.is_an_event_entry(event_entry, [cf_name])
+    assert Event.is_an_event_entry(event_entry)
     return event_entry
 
 
-def entry_to_event(event_entry, cf_names):
-    assert Event.is_an_event_entry(event_entry, cf_names)
-    return Event(event_entry, cf_names)
+def entry_to_event(event_entry):
+    assert Event.is_an_event_entry(event_entry)
+    return Event(event_entry)
 
 
 def create_event(job_id, cf_names, time_str, event_type=None, cf_name=None,
@@ -114,5 +124,5 @@ def create_event(job_id, cf_names, time_str, event_type=None, cf_name=None,
     event_entry = create_event_entry(job_id, time_str, event_type, cf_name,
                                      make_illegal_json, **kwargs)
 
-    assert Event.is_an_event_entry(event_entry, cf_names)
-    return Event.create_event(event_entry, cf_names)
+    assert Event.is_an_event_entry(event_entry)
+    return Event.create_event(event_entry)
