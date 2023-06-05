@@ -290,27 +290,6 @@ def prepare_general_cf_info_for_display(parsed_log):
         cf_display_info["Filter-Policy"] = \
             prepare_cf_filter_stats_for_display(
                 filter_stats.files_filter_stats[cf_name], format_as_dict=False)
-        # cf_filter_policy = cf_options['filter_policy'][cf_name]
-        # if cf_filter_policy is not None:
-        #     if SanitizedValueType.get_type_from_str(cf_filter_policy) != \
-        #             SanitizedValueType.NULL_PTR:
-        #         cf_display_info["Filter-Policy"] = \
-        #             cf_options['filter_policy'][cf_name]
-        #         bpk_str = " (unknown bpk)"
-        #         if filter_stats.files_filter_stats:
-        #             if cf_name in filter_stats.files_filter_stats:
-        #                 avg_bpk = \
-        #                     filter_stats.files_filter_stats[cf_name].\
-        #                     avg_bpk
-        #                 if avg_bpk is not None:
-        #                     bpk_str = f" ({avg_bpk:.1f} bpk)"
-        #                 else:
-        #                     bpk_str = " (unknown bpk)"
-        #         cf_display_info["Filter-Policy"] += bpk_str
-        #     else:
-        #         cf_display_info["Filter-Policy"] = "No Filter"
-        # else:
-        #     cf_display_info["Filter-Policy"] = "UNKNOWN"
 
     return display_info
 
@@ -655,6 +634,11 @@ def prepare_cf_compactions_stats_for_display(parsed_log):
             assert isinstance(cf_compactions_stats,
                               calc_utils.CfCompactionStats)
             s = cf_compactions_stats
+            if s.per_level_write_amp is not None:
+                per_level_write_amp = s.per_level_write_amp
+            else:
+                per_level_write_amp = "No Write-Amp Info Found"
+
             disp[cf_name] = {
                 "Num Compactions": s.num_compactions,
                 "Min Compactions BW":
@@ -664,7 +648,7 @@ def prepare_cf_compactions_stats_for_display(parsed_log):
                 "Comp": format_value(s.comp_sec, "seconds"),
                 "Comp Merge CPU": format_value(s.comp_merge_cpu_sec,
                                                "seconds"),
-                "Per-Level Write-Amp": s.per_level_write_amp
+                "Per-Level Write-Amp": per_level_write_amp
             }
         else:
             disp[cf_name] = "No Compaction Stats"
