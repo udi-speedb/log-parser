@@ -201,8 +201,8 @@ class CfsMetadata:
                 self.cfs_info[cf_name].auto_generated]
 
     def get_all_cf_names(self):
-        return self.get_non_auto_generated_cfs_names() + \
-               self.get_auto_generated_cf_names()
+        # Returning directly from self.cfs_info to maintain the order of cf-s
+        return list(self.cfs_info.keys())
 
     def get_num_cfs(self):
         return len(self.cfs_info) if self.cfs_info else 0

@@ -49,7 +49,7 @@ class DbSizeBytesInfo:
     size_bytes: int = 0
 
 
-def get_db_size_bytes_info_at_end(compaction_stats_mngr):
+def get_db_size_bytes_info_at_end(cfs_names, compaction_stats_mngr):
     assert isinstance(compaction_stats_mngr, CompactionStatsMngr)
 
     last_entry_all_cfs = compaction_stats_mngr.get_last_level_entry_all_cfs()
@@ -58,7 +58,10 @@ def get_db_size_bytes_info_at_end(compaction_stats_mngr):
 
     size_bytes = 0
     size_time = None
-    for cf_name, cf_entry in last_entry_all_cfs.items():
+    for cf_name in cfs_names:
+        if cf_name not in last_entry_all_cfs:
+            continue
+        cf_entry = last_entry_all_cfs[cf_name]
         if size_time is None:
             size_time, _ = utils.get_last_dict_entry_components(cf_entry)
 
@@ -350,7 +353,8 @@ def get_db_wide_info(parsed_log: ParsedLog):
     compactions_stats_mngr = \
         parsed_log.get_stats_mngr().get_compactions_stats_mngr()
 
-    db_size_bytes_info = get_db_size_bytes_info_at_end(compactions_stats_mngr)
+    db_size_bytes_info = get_db_size_bytes_info_at_end(
+        cfs_names, compactions_stats_mngr)
     assert isinstance(db_size_bytes_info, DbSizeBytesInfo)
 
     ingest_info = get_db_ingest_info(db_wide_stats_mngr)
@@ -854,32 +858,43 @@ class CfFilterFilesStats:
     avg_bpk: float = None
 
 
-def calc_files_filter_stats(db_opts, files_monitor):
+def calc_files_filter_stats(cfs_names, db_opts, files_monitor):
     assert isinstance(db_opts, db_options.DatabaseOptions)
     assert isinstance(files_monitor, db_files.DbFilesMonitor)
 
     stats = dict()
 
     cfs_options = get_applicable_cf_options(db_opts)
-    for cf_name in cfs_options['filter_policy']:
-        cf_filter_policy = cfs_options['filter_policy'][cf_name]
-        stats[cf_name] = CfFilterFilesStats(filter_policy=cf_filter_policy)
+    cfs_filters_from_options = dict()
+    for cf_name in cfs_names:
+        if cf_name in cfs_options['filter_policy']:
+            cfs_filters_from_options[cf_name] = \
+                cfs_options['filter_policy'][cf_name]
 
-    for cf_name in files_monitor.get_cfs_names():
+    for cf_name in cfs_names:
         cf_filter_files_stats = \
             db_files.calc_cf_files_stats([cf_name], files_monitor)
-        assert isinstance(cf_filter_files_stats, db_files.CfsFilesStats)
+        if cf_filter_files_stats:
+            assert isinstance(cf_filter_files_stats, db_files.CfsFilesStats)
 
-        filter_policy = \
-            cf_filter_files_stats.cfs_filter_specific[cf_name].filter_policy
-        avg_bpk = cf_filter_files_stats.cfs_filter_specific[cf_name].avg_bpk
-        cf_filter_files_stats = \
-            CfFilterFilesStats(filter_policy=filter_policy,
-                               avg_bpk=avg_bpk)
-        stats[cf_name] = cf_filter_files_stats
+            filter_policy = \
+                cf_filter_files_stats.cfs_filter_specific[
+                    cf_name].filter_policy
+            avg_bpk = \
+                cf_filter_files_stats.cfs_filter_specific[cf_name].avg_bpk
 
-    if not stats:
-        return None
+            stats[cf_name] = CfFilterFilesStats(filter_policy=filter_policy,
+                                                avg_bpk=avg_bpk)
+        elif cf_name in cfs_filters_from_options:
+            filter_policy = cfs_filters_from_options[cf_name]
+            stats[cf_name] = CfFilterFilesStats(filter_policy=filter_policy,
+                                                avg_bpk=None)
+        else:
+            # INVALID_FILTER_POLICY to indicate this cf's filter policy
+            # can't be deduced (instead of None which means - we know it has
+            # no filter policy)
+            stats[cf_name] = CfFilterFilesStats(
+                filter_policy=utils.INVALID_FILTER_POLICY, avg_bpk=None)
 
     return stats
 
@@ -936,13 +951,15 @@ class FilterStats:
     filter_counters: FilterCounters = None
 
 
-def calc_filter_stats(db_opts, files_monitor, counters_mngr):
+def calc_filter_stats(cfs_names, db_opts, files_monitor, counters_mngr):
     assert isinstance(db_opts, db_options.DatabaseOptions)
     assert isinstance(files_monitor, db_files.DbFilesMonitor)
     assert isinstance(counters_mngr, CountersMngr)
 
     stats = FilterStats()
-    files_filter_stats = calc_files_filter_stats(db_opts, files_monitor)
+    files_filter_stats = calc_files_filter_stats(cfs_names,
+                                                 db_opts,
+                                                 files_monitor)
     if files_filter_stats:
         stats.files_filter_stats = files_filter_stats
 
