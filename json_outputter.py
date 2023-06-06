@@ -23,7 +23,14 @@ import log_file
 import utils
 
 
-def get_db_size_json(db_wide_stats_mngr, compactions_stats_mngr):
+def get_db_size_json(parsed_log):
+    assert isinstance(parsed_log, log_file.ParsedLog)
+
+    cfs_names = parsed_log.get_cfs_names(include_auto_generated=False)
+    stats_mngr = parsed_log.get_stats_mngr()
+    db_wide_stats_mngr = stats_mngr.get_db_wide_stats_mngr()
+    compactions_stats_mngr = stats_mngr.get_compactions_stats_mngr()
+
     db_size_json = {}
 
     ingest_info = calc_utils.get_db_ingest_info(db_wide_stats_mngr)
@@ -35,7 +42,8 @@ def get_db_size_json(db_wide_stats_mngr, compactions_stats_mngr):
         db_size_json["Ingest"] = "No Ingest Info Available"
 
     growth_info = \
-        calc_utils.calc_cfs_size_bytes_growth(compactions_stats_mngr)
+        calc_utils.calc_cfs_size_bytes_growth(cfs_names,
+                                              compactions_stats_mngr)
     growth_json =\
         display_utils.prepare_cfs_size_bytes_growth_for_display(growth_info)
     db_size_json["CF-s Growth"] = growth_json
@@ -163,10 +171,6 @@ def get_block_cache_json(parsed_log):
 def get_json(parsed_log):
     j = dict()
 
-    stats_mngr = parsed_log.get_stats_mngr()
-    db_wide_stats_mngr = stats_mngr.get_db_wide_stats_mngr()
-    compactions_stats_mngr = stats_mngr.get_compactions_stats_mngr()
-
     j["General"] = display_utils.prepare_db_wide_info_for_display(parsed_log)
     j["General"]["CF-s"] = \
         display_utils.prepare_general_cf_info_for_display(parsed_log)
@@ -177,7 +181,7 @@ def get_json(parsed_log):
         "All Options": display_utils.get_all_options_for_display(parsed_log)
     }
 
-    j["DB-Size"] = get_db_size_json(db_wide_stats_mngr, compactions_stats_mngr)
+    j["DB-Size"] = get_db_size_json(parsed_log)
 
     j["Flushes"] = get_flushes_json(parsed_log)
     j["Compactions"] = get_compactions_json(parsed_log)

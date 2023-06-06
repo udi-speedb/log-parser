@@ -87,10 +87,10 @@ def get_per_cf_per_level_size_bytes(entry_all_cfs):
     return growth
 
 
-def calc_cfs_size_bytes_growth(compaction_stats_mngr):
+def calc_cfs_size_bytes_growth(cfs_names, compaction_stats_mngr):
     assert isinstance(compaction_stats_mngr, CompactionStatsMngr)
 
-    growth = dict()
+    growth = {cf_name: None for cf_name in cfs_names}
 
     first_entry_all_cfs = compaction_stats_mngr.get_first_level_entry_all_cfs()
     if not first_entry_all_cfs:

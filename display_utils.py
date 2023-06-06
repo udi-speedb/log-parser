@@ -721,7 +721,7 @@ def generate_ascii_table(columns_names, table):
 def prepare_cfs_size_bytes_growth_for_display(growth):
     disp = {}
     if not growth:
-        return "All CF-s Empty"
+        return "No Growth Information Available"
 
     def get_delta_str(delta_value):
         abs_delta_str = num_bytes_for_display(abs(delta_value))
@@ -752,6 +752,10 @@ def prepare_cfs_size_bytes_growth_for_display(growth):
         return value_str
 
     for cf_name in growth:
+        if growth[cf_name] is None:
+            disp[cf_name] = "No Growth Information Available"
+            continue
+
         disp[cf_name] = {}
 
         if not growth[cf_name]:
