@@ -317,6 +317,7 @@ class ParsedLog:
                                        options_dict,
                                        table_options_dict)
 
+        # TODO - Handle failure in add_cf_found_during_cf_options_parsing
         cf_id = None
         self.cfs_metadata.add_cf_found_during_cf_options_parsing(
             cf_name, cf_id, is_auto_generated, self.get_curr_entry())

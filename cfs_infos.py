@@ -26,7 +26,8 @@ get_error_context = utils.get_error_context_from_entry
 class CfDiscoveryType(Enum):
     OPTIONS = 1
     CREATE_NO_OPTIONS = 2
-    DURING_PARSING = 3
+    RECOVERED_NO_OPTIONS = 3
+    DURING_PARSING = 4
 
 
 @dataclass
@@ -47,7 +48,8 @@ class CfMetadata:
         if self.discovery_type.value != other.discovery_type.value:
             return self.discovery_type.value < other.discovery_type.value
         if self.discovery_type == CfDiscoveryType.OPTIONS or \
-                self.discovery_type == CfDiscoveryType.CREATE_NO_OPTIONS:
+                self.discovery_type == CfDiscoveryType.CREATE_NO_OPTIONS or \
+                self.discovery_type == CfDiscoveryType.RECOVERED_NO_OPTIONS:
             return self.discovery_time < other.discovery_time
         return self.name < other.name
 
@@ -65,7 +67,8 @@ class CfsMetadata:
 
     def add_cf_found_during_cf_options_parsing(self, cf_name, cf_id,
                                                is_auto_generated, entry):
-        self.validate_cf_doesnt_exist(cf_name, entry)
+        if not self._validate_cf_doesnt_exist(cf_name, entry):
+            return False
 
         self.cfs_info[cf_name] = \
             CfMetadata(discovery_type=CfDiscoveryType.OPTIONS,
@@ -74,12 +77,13 @@ class CfsMetadata:
                        has_options=True,
                        auto_generated=is_auto_generated,
                        id=cf_id)
+        return True
 
     def handle_cf_name_found_during_parsing(self, cf_name, entry, cf_id=None):
         if cf_name in self.cfs_info:
             return False
 
-        logging.info(f"Found cf name during parsing [{cf_name}]")
+        logging.info(f"Found new cf name during parsing [{cf_name}]")
         self.cfs_info[cf_name] = \
             CfMetadata(discovery_type=CfDiscoveryType.DURING_PARSING,
                        name=cf_name,
@@ -130,7 +134,7 @@ class CfsMetadata:
                 entry=entry, file_path=self.log_file_path))
             return True
 
-        self.validate_cf_wasnt_dropped(cf_info, entry)
+        self._validate_cf_wasnt_dropped(cf_info, entry, raise_exception=True)
         cf_info.drop_time = entry.get_time()
 
         return True
@@ -143,8 +147,18 @@ class CfsMetadata:
 
         cf_name = cf_match.group('cf')
         cf_id = int(cf_match.group('cf_id'))
-        self.validate_cf_exists(cf_name, entry)
-        self.validate_cf_id_unknown_or_same(cf_name, cf_id, entry)
+
+        if self._does_cf_exist(cf_name):
+            self._update_cf_id(cf_name, cf_id, entry, raise_exception=True)
+        else:
+            logging.info(f"Created cf without options [{cf_name}]")
+            self.cfs_info[cf_name] = \
+                CfMetadata(discovery_type=CfDiscoveryType.RECOVERED_NO_OPTIONS,
+                           name=cf_name,
+                           discovery_time=entry.get_time(),
+                           has_options=False,
+                           auto_generated=False,
+                           id=cf_id)
         return True
 
     def try_parse_as_create_cf(self, entry):
@@ -157,18 +171,28 @@ class CfsMetadata:
         cf_name = cf_match.group('cf')
         cf_id = int(cf_match.group('cf_id'))
 
-        self.validate_cf_exists(cf_name, entry)
-        self.validate_cf_id_unknown_or_same(cf_name, cf_id, entry)
+        if self._does_cf_exist(cf_name):
+            self._update_cf_id(cf_name, cf_id, entry, raise_exception=True)
+        else:
+            logging.info(f"Created cf without options [{cf_name}]")
+            self.cfs_info[cf_name] = \
+                CfMetadata(discovery_type=CfDiscoveryType.CREATE_NO_OPTIONS,
+                           name=cf_name,
+                           discovery_time=entry.get_time(),
+                           has_options=False,
+                           auto_generated=False,
+                           id=cf_id)
+
         return True
 
     def parsing_complete(self):
         self.cfs_info = utils.sort_dict_on_values(self.cfs_info)
 
     def set_cf_id(self, cf_name, cf_id, line, line_idx):
-        self.validate_cf_exists(cf_name, line, line_idx)
+        self._validate_cf_exists(cf_name, line, line_idx)
 
         cf_id = int(cf_id)
-        self.validate_cf_id_unknown_or_same(cf_name, cf_id, line, line_idx)
+        self._update_cf_id(cf_name, cf_id, line, line_idx)
 
         self.cfs_info[cf_name].id = int(cf_id)
 
@@ -200,12 +224,27 @@ class CfsMetadata:
         return [cf_name for cf_name in self.cfs_info.keys() if
                 self.cfs_info[cf_name].auto_generated]
 
+    def get_cfs_names_that_have_options(self):
+        return [cf_name for cf_name in self.cfs_info.keys() if
+                self.cfs_info[cf_name].has_options]
+
     def get_all_cf_names(self):
         # Returning directly from self.cfs_info to maintain the order of cf-s
         return list(self.cfs_info.keys())
 
     def get_num_cfs(self):
         return len(self.cfs_info) if self.cfs_info else 0
+
+    def are_there_auto_generated_cf_names(self):
+        return len(self.get_auto_generated_cf_names()) > 0
+
+    def get_num_cfs_when_certain(self):
+        # Once a log has auto-generated cf names we have no certain way of
+        # knowing how many cf-s there are
+        if self.are_there_auto_generated_cf_names():
+            return None
+        else:
+            return self.get_num_cfs()
 
     def was_cf_dropped(self, cf_name):
         cf_info = self.get_cf_info_by_name(cf_name)
@@ -220,45 +259,49 @@ class CfsMetadata:
             drop_time = cf_info.drop_time
         return drop_time
 
-    def validate_cf_exists(self, cf_name, entry):
+    def _validate_cf_exists(self, cf_name, entry):
         if cf_name not in self.cfs_info:
             raise utils.ParsingError(
                 f"cf ({cf_name}) doesn't exist.",
                 self.get_error_context(entry))
 
-    def does_cf_exist(self, cf_name):
+    def _does_cf_exist(self, cf_name):
         return cf_name in self.cfs_info
 
-    def validate_cf_doesnt_exist(self, cf_name, entry):
-        if self.does_cf_exist(cf_name):
-            raise utils.ParsingError(
-                f"cf ({cf_name}) already exists.",
-                self.get_error_context(entry))
+    def _validate_cf_doesnt_exist(self, cf_name, entry):
+        if self._does_cf_exist(cf_name):
+            context = self.get_error_context(entry)
+            logging.error(f"cf ({cf_name}) already exists.{context}")
+            return False
+        return True
 
-    def validate_known_cf_id(self, cf_id, entry):
-        if not self.get_cf_info_by_id(cf_id):
-            raise utils.ParsingError(
-                f"No CF has that id ({cf_id}).", self.get_error_context(entry))
-
-    def validate_cf_id_unknown_or_same(self, cf_name, cf_id, entry):
+    def _update_cf_id(self, cf_name, cf_id, entry, raise_exception):
         curr_cf_id = self.cfs_info[cf_name].id
         if curr_cf_id and curr_cf_id != int(cf_id):
-            raise utils.ParsingError(
-                f"id ({cf_id}) of cf ({cf_name}) already exists.",
-                self.get_error_context(entry))
+            context = self.get_error_context(entry)
+            if raise_exception:
+                raise utils.ParsingError(
+                    f"id ({cf_id}) of cf ({cf_name}) already exists.", context)
+            else:
+                logging.error(
+                    f"id ({cf_id}) of cf ({cf_name}) already exists.{context}")
+                return False
 
-    def validate_cf_is_not_auto_generated(self, cf_name, entry):
-        if self.cfs_info[cf_name].auto_generated:
-            raise utils.ParsingError(
-                    f"CF ({cf_name}) is auto-generated.",
-                    self.get_error_context(entry))
+        self.cfs_info[cf_name].id = cf_id
+        return True
 
-    def validate_cf_wasnt_dropped(self, cf_info, entry):
+    def _validate_cf_wasnt_dropped(self, cf_info, entry, raise_exception):
         if cf_info.drop_time:
-            raise utils.ParsingError(
-                f"CF ({cf_info.name}) already dropped at "
-                f"({cf_info.drop_time}).",
-                self.get_error_context(entry))
+            context = self.get_error_context(entry)
+            if raise_exception:
+                raise utils.ParsingError(
+                    f"CF ({cf_info.name}) already dropped at "
+                    f"({cf_info.drop_time}).", context)
+            else:
+                logging.error(f"CF ({cf_info.name}) already dropped at "
+                              f"({cf_info.drop_time}).{context}")
+                return False
+        return True
 
     def get_error_context(self, entry):
         return utils.get_error_context_from_entry(entry, self.log_file_path)

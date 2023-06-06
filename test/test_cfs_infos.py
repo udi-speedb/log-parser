@@ -31,13 +31,26 @@ cf1_recovered_line = \
     '2023/03/07-16:05:55.532774 8379 [/version_set.cc:5585] ' \
     f'Column family [{cf1}] (ID {cf1_id}), log number is 0'.strip()
 
+
+cf1_cf2_id_recovered_line = \
+    '2023/03/07-16:05:55.532774 8379 [/version_set.cc:5585] ' \
+    f'Column family [{cf1}] (ID {cf2_id}), log number is 0'.strip()
+
 cf1_created_line = \
     '2023/03/07-16:06:09.051479 8432 [/db_impl/db_impl.cc:3200] ' \
     f'Created column family [{cf1}] (ID {cf1_id})'
 
+cf1_cf2_id_created_line = \
+    '2023/03/07-16:06:09.051479 8432 [/db_impl/db_impl.cc:3200] ' \
+    f'Created column family [{cf1}] (ID {cf2_id})'
+
 cf2_created_line = \
     '2023/03/07-16:06:09.051479 8432 [/db_impl/db_impl.cc:3200] ' \
     f'Created column family [{cf2}] (ID {cf2_id})'
+
+cf2_cf1_id_created_line = \
+    '2023/03/07-16:06:09.051479 8432 [/db_impl/db_impl.cc:3200] ' \
+    f'Created column family [{cf2}] (ID {cf1_id})'
 
 cf1_drop_time = '2023/03/07-16:06:09.037627'
 cf1_dropped_line = \
@@ -50,9 +63,14 @@ cf2_dropped_line = \
 
 cf1_options_entry = test_utils.line_to_entry(cf1_options_line)
 cf1_recovered_entry = test_utils.line_to_entry(cf1_recovered_line)
+cf1_cf2_id_recovered_entry = \
+    test_utils.line_to_entry(cf1_cf2_id_recovered_line)
 
 cf1_created_entry = test_utils.line_to_entry(cf1_created_line)
+cf1_cf2_id_created_entry = test_utils.line_to_entry(cf1_cf2_id_created_line)
+
 cf2_created_entry = test_utils.line_to_entry(cf2_created_line)
+cf2_cf1_id_created_entry = test_utils.line_to_entry(cf2_cf1_id_created_line)
 
 cf1_dropped_entry = test_utils.line_to_entry(cf1_dropped_line)
 cf2_dropped_entry = test_utils.line_to_entry(cf2_dropped_line)
@@ -71,10 +89,10 @@ def test_empty():
 def test_add_cf_found_during_options_parsing_cf_name_known():
     cfs = CfsMetadata("dummy-path")
 
-    cfs.add_cf_found_during_cf_options_parsing(cf1,
-                                               cf1_id,
-                                               is_auto_generated=False,
-                                               entry=cf1_options_entry)
+    assert cfs.add_cf_found_during_cf_options_parsing(cf1,
+                                                      cf1_id,
+                                                      is_auto_generated=False,
+                                                      entry=cf1_options_entry)
     expected_cf_metadata = \
         CfMetadata(discovery_type=CfDiscoveryType.OPTIONS,
                    name=cf1,
@@ -102,10 +120,10 @@ def test_add_cf_found_during_options_parsing_auto_generated_cf_name():
             '2023/01/23-22:09:21.013513 7f6bdfd54700 '
             'Options.comparator: leveldb.BytewiseComparator')
 
-    cfs.add_cf_found_during_cf_options_parsing(cf_name=unknown_cf_name,
-                                               cf_id=None,
-                                               is_auto_generated=True,
-                                               entry=options_entry)
+    assert cfs.add_cf_found_during_cf_options_parsing(cf_name=unknown_cf_name,
+                                                      cf_id=None,
+                                                      is_auto_generated=True,
+                                                      entry=options_entry)
     expected_cf_metadata = \
         CfMetadata(discovery_type=CfDiscoveryType.OPTIONS,
                    name=unknown_cf_name,
@@ -126,10 +144,10 @@ def test_add_cf_found_during_options_parsing_auto_generated_cf_name():
 def test_handle_cf_name_found_during_parsing():
     cfs = CfsMetadata("dummy-path")
 
-    cfs.add_cf_found_during_cf_options_parsing(cf1,
-                                               cf1_id,
-                                               is_auto_generated=False,
-                                               entry=cf1_options_entry)
+    assert cfs.add_cf_found_during_cf_options_parsing(cf1,
+                                                      cf1_id,
+                                                      is_auto_generated=False,
+                                                      entry=cf1_options_entry)
 
     stats_start_entry =\
         test_utils.line_to_entry('2023/01/23-22:19:21.014278 7f6bdfd54700 ['
@@ -161,33 +179,68 @@ def test_handle_cf_name_found_during_parsing():
 def test_parse_cf_recovered_entry():
     cfs = CfsMetadata("dummy-path")
 
+    assert cfs.add_cf_found_during_cf_options_parsing(cf1,
+                                                      cf_id=None,
+                                                      is_auto_generated=False,
+                                                      entry=cf1_options_entry)
+    assert cfs.get_cf_id(cf1) is None
+
     assert cfs.try_parse_as_cf_lifetime_entries(
         [cf1_recovered_entry], entry_idx=0) == (True, 1)
-    cfs.get_cf_id(cf1) is None
+    assert cfs.get_cf_id(cf1) == 10
 
-    cfs.add_cf_found_during_cf_options_parsing(cf1, cf_id=None,
-                                               is_auto_generated=False,
-                                               entry=cf1_recovered_entry)
-    cfs.get_cf_id(cf1) is None
+    # Illegal (different cf_id), but should be silently ignored
+    assert cfs.try_parse_as_cf_lifetime_entries(
+        [cf1_cf2_id_recovered_entry], entry_idx=0) == (True, 1)
+    assert cfs.get_cf_id(cf1) == 10
+
     assert cfs.try_parse_as_cf_lifetime_entries([cf1_recovered_entry],
                                                 entry_idx=0) == (True, 1)
-    cfs.get_cf_id(cf1) == cf1_id
+    assert cfs.get_cf_id(cf1) == 10
+
+
+def test_parse_cf_recovered_entry_2():
+    cfs = CfsMetadata("dummy-path")
+
+    # Recovered without options
+    assert cfs.try_parse_as_cf_lifetime_entries(
+        [cf1_recovered_entry], entry_idx=0) == (True, 1)
+    assert cfs.get_cf_id(cf1) == 10
+
+    # Already discovered without options => Rejected
+    assert not cfs.add_cf_found_during_cf_options_parsing(
+        cf1, cf_id=None, is_auto_generated=False, entry=cf1_recovered_entry)
+    assert cfs.get_cf_id(cf1) == 10
 
 
 def test_parse_cf_created_entry():
     cfs = CfsMetadata("dummy-path")
 
-    cfs.try_parse_as_cf_lifetime_entries(
-        [cf1_created_entry], entry_idx=0) == (True, 1)
-    cfs.get_cf_id(cf1) is None
+    assert cfs.add_cf_found_during_cf_options_parsing(
+        cf1, cf_id=None, is_auto_generated=False, entry=cf1_recovered_entry)
+    assert cfs.get_cf_id(cf1) is None
 
-    cfs.add_cf_found_during_cf_options_parsing(cf1, cf_id=None,
-                                               is_auto_generated=False,
-                                               entry=cf1_recovered_entry)
-    cfs.get_cf_id(cf1) is None
     assert cfs.try_parse_as_cf_lifetime_entries([cf1_created_entry],
                                                 entry_idx=0) == (True, 1)
-    cfs.get_cf_id(cf1) == cf1_id
+    assert cfs.get_cf_id(cf1) == cf1_id
+
+    # Already discovered without options => Rejected
+    assert cfs.try_parse_as_cf_lifetime_entries([cf1_cf2_id_recovered_entry],
+                                                entry_idx=0) == (True, 1)
+    assert cfs.get_cf_id(cf1) == cf1_id
+
+
+def test_parse_cf_created_entry_2():
+    cfs = CfsMetadata("dummy-path")
+
+    # Created without options
+    cfs.try_parse_as_cf_lifetime_entries(
+        [cf1_created_entry], entry_idx=0) == (True, 1)
+    assert cfs.get_cf_id(cf1) == cf1_id
+
+    assert not cfs.add_cf_found_during_cf_options_parsing(
+        cf1, cf_id=None, is_auto_generated=False, entry=cf1_recovered_entry)
+    assert cfs.get_cf_id(cf1) == cf1_id
 
 
 def test_parse_cf_dropped_entry():
@@ -200,14 +253,13 @@ def test_parse_cf_dropped_entry():
     assert not cfs.was_cf_dropped(cf1)
     assert cfs.get_cf_drop_time(cf1) is None
 
-    cfs.add_cf_found_during_cf_options_parsing(cf1, cf_id=cf1_id,
-                                               is_auto_generated=False,
-                                               entry=cf1_recovered_entry)
-    cfs.get_cf_id(cf1) == cf1_id
+    assert cfs.add_cf_found_during_cf_options_parsing(
+        cf1, cf_id=cf1_id, is_auto_generated=False, entry=cf1_recovered_entry)
+    assert cfs.get_cf_id(cf1) == cf1_id
 
     assert cfs.try_parse_as_cf_lifetime_entries([cf1_dropped_entry],
                                                 entry_idx=0) == (True, 1)
-    cfs.get_cf_id(cf1) == cf1_id
+    assert cfs.get_cf_id(cf1) == cf1_id
     assert cfs.was_cf_dropped(cf1)
     assert cfs.get_cf_drop_time(cf1) == cf1_drop_time
 
