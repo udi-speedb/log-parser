@@ -217,19 +217,23 @@ class CfsMetadata:
         return None
 
     def get_non_auto_generated_cfs_names(self):
-        return [cf_name for cf_name in self.cfs_info.keys() if not
-                self.cfs_info[cf_name].auto_generated]
+        return [cf_name for cf_name in self.cfs_info.keys() if
+                not self.cfs_info[cf_name].auto_generated]
 
     def get_auto_generated_cf_names(self):
         return [cf_name for cf_name in self.cfs_info.keys() if
                 self.cfs_info[cf_name].auto_generated]
 
-    def get_cfs_names_that_have_options(self):
-        return [cf_name for cf_name in self.cfs_info.keys() if
-                self.cfs_info[cf_name].has_options]
+    def get_cfs_names_that_have_options(self, include_auto_generated):
+        returned_cfs_names = []
+        for cf_name in self.cfs_info.keys():
+            if self.cfs_info[cf_name].has_options:
+                if include_auto_generated or \
+                        not self.cfs_info[cf_name].auto_generated:
+                    returned_cfs_names.append(cf_name)
+        return returned_cfs_names
 
-    def get_all_cf_names(self):
-        # Returning directly from self.cfs_info to maintain the order of cf-s
+    def get_all_cfs_names(self):
         return list(self.cfs_info.keys())
 
     def get_num_cfs(self):

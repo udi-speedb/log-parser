@@ -527,16 +527,23 @@ class ParsedLog:
 
     def get_cfs_names(self, include_auto_generated):
         if include_auto_generated:
-            return self.cfs_metadata.get_all_cf_names()
+            return self.cfs_metadata.get_all_cfs_names()
         else:
             return self.cfs_metadata.get_non_auto_generated_cfs_names()
 
-    def get_cfs_names_that_have_options(self):
+    def get_cfs_names_that_have_options(self, include_auto_generated):
         # Return only the names of cf-s for which options exist
-        return self.db_options.get_cfs_names()
+        return self.cfs_metadata.get_cfs_names_that_have_options(
+            include_auto_generated)
 
-    def get_auto_generated_cf_names(self):
+    def get_auto_generated_cfs_names(self):
         return self.cfs_metadata.get_auto_generated_cf_names()
+
+    def does_have_auto_generated_cfs_names(self):
+        return len(self.get_auto_generated_cfs_names()) > 0
+
+    def get_num_cfs_when_certain(self):
+        return self.cfs_metadata.get_num_cfs_when_certain()
 
     def get_database_options(self):
         return self.db_options

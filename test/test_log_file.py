@@ -281,7 +281,7 @@ def test_parse_options_in_rolled_log():
     parsed_log = test_utils.create_parsed_log(SampleRolledLogInfo.FILE_PATH)
     assert parsed_log.get_cfs_names(include_auto_generated=False) == \
            SampleRolledLogInfo.CF_NAMES
-    assert parsed_log.get_auto_generated_cf_names() ==\
+    assert parsed_log.get_auto_generated_cfs_names() == \
            SampleRolledLogInfo.AUTO_GENERATED_CF_NAMES
 
     actual_db_options = parsed_log.get_database_options()

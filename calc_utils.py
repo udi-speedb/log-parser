@@ -365,7 +365,7 @@ def get_db_wide_info(parsed_log: ParsedLog):
         "git_hash": metadata.get_git_hash(),
         "db_size_bytes": db_size_bytes_info.size_bytes,
         "db_size_bytes_time": db_size_bytes_info.size_time,
-        "num_cfs": len(parsed_log.get_cfs_names(include_auto_generated=True)),
+        "num_cfs": parsed_log.get_num_cfs_when_certain(),
         "avg_key_size_bytes": avg_key_size_bytes,
         "avg_value_size_bytes": avg_value_size_bytes,
         "num_warnings": warns_mngr.get_total_num_warns(),

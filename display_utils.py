@@ -232,7 +232,19 @@ def prepare_db_wide_info_for_display(parsed_log):
     display_info.update(
         prepare_db_wide_user_opers_stats_for_display(db_wide_info))
 
-    display_info['Num CF-s'] = db_wide_info['num_cfs']
+    num_cfs_info_msg = \
+        "Please see the log parser's documentation for more information"
+    if db_wide_info['num_cfs'] is not None:
+        total_num_cfs = db_wide_info['num_cfs']
+        num_non_auto_gen_cfs_with_options = \
+            parsed_log.get_cfs_names_that_have_options(
+                include_auto_generated=False)
+        display_info['Num CF-s'] = total_num_cfs
+        if total_num_cfs != num_non_auto_gen_cfs_with_options:
+            display_info["Num CF-s Info"] = num_cfs_info_msg
+    else:
+        display_info['Num CF-s'] = "Can't be accurately determined"
+        display_info["Num CF-s Info"] = num_cfs_info_msg
 
     return display_info
 
@@ -240,7 +252,8 @@ def prepare_db_wide_info_for_display(parsed_log):
 def prepare_general_cf_info_for_display(parsed_log):
     assert isinstance(parsed_log, log_file.ParsedLog)
 
-    cfs_names = parsed_log.get_cfs_names(include_auto_generated=True)
+    cfs_names = parsed_log.get_cfs_names_that_have_options(
+        include_auto_generated=False)
 
     filter_stats = \
         calc_utils.calc_filter_stats(cfs_names,

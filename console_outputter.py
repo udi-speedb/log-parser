@@ -39,7 +39,6 @@ def print_cf_console_printout(f, parsed_log):
 
     cfs_display_values = []
     for cf_name, cf_info in cfs_info_for_display.items():
-        # cf_info = cfs_info_for_display[cf_name]
         row = [
             cf_name,
             cf_info["CF Size"],
@@ -64,41 +63,52 @@ def print_cf_console_printout(f, parsed_log):
 
 
 def print_general_info(f, parsed_log: ParsedLog):
-    display_general_info_dict = \
+    disp_dict = \
         display_utils.prepare_db_wide_info_for_display(parsed_log)
 
-    if isinstance(display_general_info_dict["Error Messages"], dict):
+    if isinstance(disp_dict["Error Messages"], dict):
         error_lines = ""
         for error_time, error_msg in \
-                display_general_info_dict["Error Messages"].items():
+                disp_dict["Error Messages"].items():
             error_lines += f"\n{error_time} {error_msg}"
-        display_general_info_dict["Error Messages"] = error_lines
+        disp_dict["Error Messages"] = error_lines
 
-    if isinstance(display_general_info_dict["Fatal Messages"], dict):
+    if isinstance(disp_dict["Fatal Messages"], dict):
         error_lines = ""
         for error_time, error_msg in \
-                display_general_info_dict["Fatal Messages"].items():
+                disp_dict["Fatal Messages"].items():
             error_lines += f"\n{error_time} {error_msg}"
-        display_general_info_dict["Fatal Messages"] = error_lines
+        disp_dict["Fatal Messages"] = error_lines
 
-    display_general_info_dict = \
+    disp_dict = \
         utils.replace_key_keep_order(
-            display_general_info_dict, "DB Size", "DB Size (*)")
-    db_size_time = display_general_info_dict["DB Size Time"]
-    del display_general_info_dict["DB Size Time"]
+            disp_dict, "DB Size", "DB Size (*)")
+    db_size_time = disp_dict["DB Size Time"]
+    del disp_dict["DB Size Time"]
 
-    ingest_time = display_general_info_dict["Ingest Time"]
+    ingest_time = disp_dict["Ingest Time"]
 
     suffix = "*"
     if db_size_time != ingest_time:
         suffix += "*"
-    display_general_info_dict = \
+    disp_dict = \
         utils.replace_key_keep_order(
-            display_general_info_dict, "Ingest", f"Ingest ({suffix})")
-    del display_general_info_dict["Ingest Time"]
+            disp_dict, "Ingest", f"Ingest ({suffix})")
+    del disp_dict["Ingest Time"]
+
+    num_cfs_info_key = "Num CF-s Info"
+    num_cfs_info = None
+    if "Num CF-s Info" in disp_dict:
+        suffix += "*"
+        num_cfs_info_suffix = suffix
+        disp_dict = \
+            utils.replace_key_keep_order(
+                disp_dict, "Num CF-s", f"Num CF-s ({suffix})")
+        num_cfs_info = disp_dict[num_cfs_info_key]
+        del disp_dict[num_cfs_info_key]
 
     width = 25
-    for field_name, value in display_general_info_dict.items():
+    for field_name, value in disp_dict.items():
         print(f"{field_name.ljust(width)}: {value}", file=f)
     print_cf_console_printout(f, parsed_log)
 
@@ -108,6 +118,9 @@ def print_general_info(f, parsed_log: ParsedLog):
         print(f"(**) Ingest Data are calculated at: {ingest_time}", file=f)
     else:
         print(f"(*) Data is calculated at: {db_size_time}", file=f)
+
+    if num_cfs_info:
+        print(f"({num_cfs_info_suffix}) {num_cfs_info}", file=f)
 
 
 def get_console_output(log_file_path, parsed_log, output_type):
