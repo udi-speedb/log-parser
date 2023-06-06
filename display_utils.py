@@ -1060,21 +1060,6 @@ def prepare_per_cf_read_latency_for_display(
                     f"{cf_stats.read_percent_of_all_cfs:.1f}%"
             }
 
-        # REMOVED READ DENSITY AS IT IS BIASED. NEEDS RECONSIDERATION
-        # for cf_name, cf_stats in per_cf_stats.items():
-        #     cf_read_density = \
-        #         calc_utils.calc_cf_read_density(compactions_stats_mngr,
-        #                                         cf_file_histogram_stats_mngr,
-        #                                         cf_stats, cf_name)
-        #     if cf_read_density:
-        #         disp_cf_read_density = {}
-        #         for level in cf_read_density.keys():
-        #             disp_cf_read_density[f"Level {level}"] = \
-        #                 f"{100 * cf_read_density[level]:.1f}%"
-        #
-        #         stats[cf_name]["Read Density"] = disp_cf_read_density
-        #     else:
-        #         stats[cf_name]["Read_density"] = "No Read Density Available"
     return stats
 
 

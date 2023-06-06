@@ -86,7 +86,7 @@ def get_reads_json(parsed_log):
     assert isinstance(parsed_log, log_file.ParsedLog)
 
     db_options = parsed_log.get_database_options()
-    cfs_names = parsed_log.get_cfs_names(include_auto_generated=True)
+    cfs_names = parsed_log.get_cfs_names(include_auto_generated=False)
     stats_mngr = parsed_log.get_stats_mngr()
     counters_mngr = parsed_log.get_counters_mngr()
     files_monitor = parsed_log.get_files_monitor()
