@@ -98,7 +98,7 @@ All the unit tests should pass.
 
 The repo contains a sample file that may be used to run the tool:
    ```sh
-   python3 test/input_files/LOG_speedb
+   python3 log_parser.py test/input_files/LOG_speedb
    ```
 
 
