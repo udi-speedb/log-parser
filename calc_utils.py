@@ -733,6 +733,7 @@ def calc_cf_read_density(compactions_stats_mngr, cf_file_histogram_stats_mngr,
     per_level_size_norm = dict()
     compaction_levels = compaction_entry.get_levels()
     for level in compaction_levels:
+        # TODO - If this ever gets used again - level_size_bytes could be None
         level_size_bytes = \
             compactions_stats_mngr.get_cf_level_size_bytes(cf_name, level)
         per_level_size_norm[level] = level_size_bytes / total_cf_size_bytes

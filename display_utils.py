@@ -252,8 +252,7 @@ def prepare_db_wide_info_for_display(parsed_log):
 def prepare_general_cf_info_for_display(parsed_log):
     assert isinstance(parsed_log, log_file.ParsedLog)
 
-    cfs_names = parsed_log.get_cfs_names_that_have_options(
-        include_auto_generated=False)
+    cfs_names = parsed_log.get_cfs_names(include_auto_generated=False)
 
     filter_stats = \
         calc_utils.calc_filter_stats(cfs_names,
@@ -276,7 +275,11 @@ def prepare_general_cf_info_for_display(parsed_log):
         display_info[cf_name] = {}
         cf_display_info = display_info[cf_name]
 
-        cf_display_info["CF Size"] = num_bytes_for_display(cf_size_bytes)
+        if cf_size_bytes is not None:
+            cf_display_info["CF Size"] = num_bytes_for_display(cf_size_bytes)
+        else:
+            cf_display_info["CF Size"] = "UNKNOWN"
+
         cf_display_info["Avg. Key Size"] = \
             num_bytes_for_display(table_creation_stats['avg_key_size'])
         cf_display_info["Avg. Value Size"] = \
@@ -300,9 +303,13 @@ def prepare_general_cf_info_for_display(parsed_log):
         else:
             cf_display_info["Compression"] = "UNKNOWN"
 
+        if cf_name in filter_stats.files_filter_stats:
+            cf_files_filter_stats = filter_stats.files_filter_stats[cf_name]
+        else:
+            cf_files_filter_stats = None
         cf_display_info["Filter-Policy"] = \
-            prepare_cf_filter_stats_for_display(
-                filter_stats.files_filter_stats[cf_name], format_as_dict=False)
+            prepare_cf_filter_stats_for_display(cf_files_filter_stats,
+                                                format_as_dict=False)
 
     return display_info
 
@@ -935,9 +942,8 @@ def prepare_block_cache_stats_for_display(cache_stats,
 
 
 def prepare_cf_filter_stats_for_display(cf_filter_stats, format_as_dict):
-    assert isinstance(cf_filter_stats, calc_utils.CfFilterFilesStats)
-
     if cf_filter_stats.filter_policy:
+        assert isinstance(cf_filter_stats, calc_utils.CfFilterFilesStats)
         if cf_filter_stats.filter_policy != utils.INVALID_FILTER_POLICY:
             sanitized_filter_policy = \
                 SanitizedValueType.get_type_from_str(
@@ -960,7 +966,7 @@ def prepare_cf_filter_stats_for_display(cf_filter_stats, format_as_dict):
         else:
             cf_disp_stats = "Filter Data Not Available"
     else:
-        cf_disp_stats = "No Filter"
+        cf_disp_stats = "Filter Data Not Available"
 
     return cf_disp_stats
 

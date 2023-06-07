@@ -524,7 +524,7 @@ class CompactionStatsMngr:
     def get_cf_size_bytes_at_end(self, cf_name):
         last_cf_entry = self.get_last_cf_level_entry(cf_name)
         if not last_cf_entry:
-            return 0
+            return None
         return CompactionStatsMngr.get_field_value_for_line_in_entry(
             last_cf_entry, CompactionStatsMngr.LineType.SUM.name,
             CompactionStatsMngr.LevelFields.SIZE_BYTES)
@@ -532,7 +532,7 @@ class CompactionStatsMngr:
     def get_cf_level_size_bytes(self, cf_name, level):
         last_cf_entry = self.get_last_cf_level_entry(cf_name)
         if not last_cf_entry:
-            return 0
+            return None
         # TODO - Turn this into a utility
         level_key = f"LEVEL-{level}"
         return CompactionStatsMngr.get_field_value_for_line_in_entry(

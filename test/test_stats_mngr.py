@@ -388,14 +388,14 @@ def test_compaction_stats_mngr():
     time = "2022/11/24-15:58:09.511260"
     mngr = CompactionStatsMngr()
 
-    assert mngr.get_cf_size_bytes_at_end("default") == 0
+    assert mngr.get_cf_size_bytes_at_end("default") is None
 
     mngr.add_lines(time, "default", lines_level)
     mngr.add_lines(time, "CF1", lines_priority)
 
     assert mngr.get_cf_size_bytes_at_end("default") == \
            utils.get_num_bytes_from_human_readable_components("82.43", "GB")
-    assert mngr.get_cf_size_bytes_at_end("CF1") == 0
+    assert mngr.get_cf_size_bytes_at_end("CF1") is None
 
 
 def test_cf_no_file_stats_mngr():

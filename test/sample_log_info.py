@@ -43,12 +43,13 @@ class SampleLogInfo:
             'default':
                 utils.get_num_bytes_from_human_readable_components(
                     "82.43", "GB"),
-            '_sample/CF_1': 0,
-            '_sample/CF-2': 0,
-            '': 0,
+            '_sample/CF_1': None,
+            '_sample/CF-2': None,
+            '': None,
         }
 
-    DB_SIZE_BYTES = sum([size for size in CF_SIZE_BYTES.values()])
+    DB_SIZE_BYTES = sum([size if size is not None else 0 for size in
+                         CF_SIZE_BYTES.values()])
 
     NUM_WARNS = 1
 
