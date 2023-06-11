@@ -838,18 +838,23 @@ def get_applicable_seek_stats(counters_mngr):
     return stats
 
 
-def get_warn_warnings_info(warnings_mngr):
+def get_warn_warnings_info(cfs_names, warnings_mngr):
     assert isinstance(warnings_mngr, WarningsMngr)
 
     all_warn_warnings = warnings_mngr.get_warnings_of_type(WarningType.WARN)
     if not all_warn_warnings:
         return None
 
-    returned_warn_warnings = copy.deepcopy(all_warn_warnings)
-    for cf_name, cf_info in returned_warn_warnings.items():
-        for category in list(cf_info.keys()):
-            cf_info[category] = len(cf_info[category])
-
+    returned_warn_warnings = {}
+    cfs_names_including_db = [utils.NO_CF] + cfs_names
+    for cf_name in cfs_names_including_db:
+        if cf_name in all_warn_warnings:
+            cf_info = copy.deepcopy(all_warn_warnings[cf_name])
+            for category in list(cf_info.keys()):
+                cf_info[category] = len(cf_info[category])
+            returned_warn_warnings[cf_name] = cf_info
+        else:
+            returned_warn_warnings[cf_name] = {}
     return returned_warn_warnings
 
 

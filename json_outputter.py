@@ -123,8 +123,8 @@ def get_seeks_json(parsed_log):
         return "No Seeks"
 
 
-def get_warn_warnings_json(warnings_mngr):
-    warnings_info = calc_utils.get_warn_warnings_info(warnings_mngr)
+def get_warn_warnings_json(cfs_names, warnings_mngr):
+    warnings_info = calc_utils.get_warn_warnings_info(cfs_names, warnings_mngr)
     if warnings_info:
         disp_dict = \
             display_utils.prepare_warn_warnings_for_display(warnings_info)
@@ -144,8 +144,9 @@ def get_fatal_warnings_json(warnings_mngr):
 
 
 def get_warnings_json(parsed_log):
+    cfs_names = parsed_log.get_cfs_names(include_auto_generated=False)
     warnings_mngr = parsed_log.get_warnings_mngr()
-    warnings_json = get_warn_warnings_json(warnings_mngr)
+    warnings_json = get_warn_warnings_json(cfs_names, warnings_mngr)
     return warnings_json
 
 
